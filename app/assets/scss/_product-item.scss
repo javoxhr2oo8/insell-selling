@@ -1,0 +1,20 @@
+.product-item {
+    button {
+        width: 100%;
+        padding: 17px;
+        font-weight: 600;
+        font-size: 18px;
+        border-radius: 10px;
+        border: none;
+        background: var(--tr-hover-color);
+        color: var(--dark-color);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        &:hover {
+            opacity: 0.8;
+        }
+        &:active {
+            transform: scale(0.95);
+        }
+    }
+}

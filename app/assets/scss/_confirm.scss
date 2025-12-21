@@ -1,0 +1,41 @@
+.confirm {
+    width: 100%;
+    background: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px 0;
+    position: fixed;
+    bottom: 0;
+    button {
+        width: 250px;
+        padding: 10px;
+        font-weight: 600;
+        font-size: 17px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: #fff;
+        background: var(--pr-color);
+        border: none;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+
+        &:hover {
+            opacity: 0.8;
+        }
+
+        &:active {
+            transform: scale(0.95);
+        }
+    }
+}
+
+
+.s-client {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
