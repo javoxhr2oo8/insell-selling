@@ -1,19 +1,31 @@
-import { useToast } from "vue-toastification";
+import pkg from 'vue-toastification';
 
-const toast = useToast();
+const { useToast } = pkg;
 
 export const ToastSuccess = (text) => {
-    toast.success(text);
+    if (process.client) {
+        const toast = useToast();
+        toast.success(text);
+    }
 }
 
 export const ToastError = (text) => {
-    toast.error(text);
+    if (process.client) {
+        const toast = useToast();
+        toast.error(text);
+    }
 }
 
 export const ToastInfo = (text) => {
-    toast.info(text);
+    if (process.client) {
+        const toast = useToast();
+        toast.info(text);
+    }
 }
 
 export const ToastWarning = (text) => {
-    toast.warning(text);
+    if (process.client) {
+        const toast = useToast();
+        toast.warning(text);
+    }
 }
