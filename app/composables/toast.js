@@ -1,6 +1,6 @@
-import pkg from 'vue-toastification';
+import * as pkg from 'vue-toastification';
 
-const { useToast } = pkg;
+const useToast = pkg.useToast || (pkg.default ? pkg.default.useToast : null);
 
 export const ToastSuccess = (text) => {
     if (process.client) {
