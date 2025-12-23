@@ -52,7 +52,7 @@ const toTrade = async (code, price) => {
     searchSwitch.value = false
 }
 
-const deleteOrder = async ()=> {
+const deleteOrder = async () => {
     store.ordersLoading = true
     store.loader = true
     const res = await api.remove_order(store.orderId).catch(err => {

@@ -11,7 +11,7 @@ const data = reactive({
     limit: 1000
 })
 
-const getUsers = async ()=> {
+const getUsers = async () => {
     const res = await api.get_users(data)
     store.sellerId = res?.data[0]?.id
     store.customerName = res?.data[0]?.name
@@ -19,7 +19,7 @@ const getUsers = async ()=> {
 }
 
 
-onMounted(()=> {
+onMounted(() => {
     getUsers()
 })
 </script>

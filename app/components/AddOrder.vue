@@ -33,6 +33,7 @@ const getOrders = async () => {
         findError('signIn', err.response?.status)
     })
     orders.value = res?.data
+    store.orderId = orders?.data?.[0]?.Orders?.id
     store.loader = false
 }
 
@@ -61,7 +62,7 @@ onMounted(() => {
     getOrders()
 })
 
-watch(()=> store.ordersLoading, ()=> {
+watch(() => store.ordersLoading, () => {
     getOrders()
 })
 </script>

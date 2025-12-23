@@ -50,6 +50,10 @@
       &:active {
         transform: scale(95%);
       }
+      @media screen and (max-width: 1100px) {
+        top: 70px;
+        z-index: 1000;
+      }
     }
     tr {
       transition: background-color 0.15s ease;

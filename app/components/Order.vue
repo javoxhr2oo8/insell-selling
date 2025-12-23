@@ -103,8 +103,6 @@ function discountFunc() {
 
 <template>
     <tbody>
-        <button class="remove-trade-btn" @click="deleteTrade(item?.Trades?.id)"><i
-                class="fa-solid fa-trash"></i></button>
         <tr>
             <td>{{ index + 1 }}</td>
 
@@ -152,5 +150,7 @@ function discountFunc() {
                 </div>
             </td>
         </tr>
+        <button class="remove-trade-btn" @click="deleteTrade(item?.Trades?.id)"><i
+                class="fa-solid fa-trash"></i></button>
     </tbody>
 </template>
