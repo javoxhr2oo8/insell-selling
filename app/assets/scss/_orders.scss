@@ -1,6 +1,22 @@
 .orders {
   margin-top: 20px;
-  padding-bottom: 80px;
+}
+
+.orders-price {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  .varib-balance {
+    font-size: 19px;
+  }
+  strong {
+    font-size: 16px;
+  }
+}
+
+.input-group-text {
+  padding: 13.5px;
+  border: 1px solid var(--dark-color);
 }
 
 .product-table {

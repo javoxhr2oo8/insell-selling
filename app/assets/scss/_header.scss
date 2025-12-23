@@ -85,3 +85,14 @@
         }
     }
 }
+
+.header-prices {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    span {
+        font-weight: 400;
+        color: var(--dark-color) !important;
+        font-size: 20px;
+    }
+}

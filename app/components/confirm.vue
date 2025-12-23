@@ -3,159 +3,180 @@ import api from '~/server/api';
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
 import { ToastError, ToastSuccess } from '@/composables/toast';
+import { ref, reactive, watch, nextTick } from 'vue';
 
 const store = useStore();
-const { findError, formatUZS } = useUtil();
+const { formatUZS } = useUtil();
 
-const orderFormSection1 = ref(true)
-const orderFormSection2 = ref(false)
-const orderFormSection3 = ref(false)
+const orderFormSection1 = ref(true);
+const orderFormSection2 = ref(false);
+const orderFormSection3 = ref(false);
 
-const getCustomersData = ref({})
-
-const getCustomers = async () => {
-    const query = {
-        search: "",
-        branch_id: store.branchId,
-        page: 0,
-        limit: 25
-    }
-    const res = await api.get_customers(query)
-    getCustomersData.value = res.data
-}
+const getCustomersData = ref({});
 
 const userData = reactive({
-    customer_name: "",
+    customer_name: '',
     customer_phone: 0,
     discount: 0,
-    loan_repayment_date: "2025-12-21",
-    loan_comment: ""
+    loan_repayment_date: '2025-12-21',
+    loan_comment: ''
 });
 
 const nasiya = ref(0);
 const showNasiyaDate = ref(false);
+const client = ref({})
 
+const current_discount = ref(0);
+
+const total_price = ref(0);
+const balance = ref(0);
+const balansePrice = ref(0);
 
 const moneyFields = reactive([
     {
         paid_money: 0,
-        order_money: 0,
         currency_id: 0,
-        kassa_id: 0
+        kassa_id: 0,
+        kassa: null
     }
 ]);
 
-const totalOrderAmount = computed(() => {
-    return store.ordersBlance?.[0]?.balance || 0;
+const getCustomers = async () => {
+    const query = { search: '', branch_id: store.branchId, page: 0, limit: 25 };
+    const res = await api.get_customers(query);
+    getCustomersData.value = res.data;
+};
+
+const getKassInfo = ref([]);
+const getKassa = async () => {
+    const res = await api.get_kassa({ branch_id: store.branchId });
+    getKassInfo.value = res;
+
+    if (res.length > 0) {
+        moneyFields.forEach((field, index) => {
+            const savedKassa = JSON.parse(localStorage.getItem(`cashier${index}`) || 'null');
+            if (savedKassa) {
+                field.kassa = savedKassa;
+                field.currency_id = savedKassa.currency_id;
+                field.kassa_id = savedKassa.id;
+            } else {
+                field.kassa = res[0]?.Kassa;
+                field.currency_id = res[0]?.Kassa?.currency_id;
+                field.kassa_id = res[0]?.Kassa?.id;
+                localStorage.setItem(`cashier${index}`, JSON.stringify(res[0]?.Kassa));
+            }
+        });
+        recalcPayments();
+    }
+};
+
+watch(() => store.modalProducts, (open) => {
+    if (!open) return;
+    const orderBalance = store.ordersBlance?.[0]?.balance || 0;
+
+    total_price.value = orderBalance;
+    balance.value = orderBalance;
+    balansePrice.value = orderBalance;
+
+    userData.discount = 0;
+    current_discount.value = 0;
+    nasiya.value = 0;
+    showNasiyaDate.value = false;
+
+    moneyFields.splice(1);
+    moneyFields[0].paid_money = orderBalance;
+
+    getKassa();
 });
 
+const recalcPayments = () => {
+    let rest = balance.value - Number(userData.discount || 0);
 
-const amountToPay = computed(() => {
-    const total = totalOrderAmount.value;
-    return total - nasiya.value - userData.discount;
-});
+    moneyFields.forEach((field, index) => {
+        if (index === 0) return;
+        let paid = Number(field.paid_money || 0);
+        if (field.kassa?.currency?.price) paid *= field.kassa.currency.price;
+        rest -= paid;
+    });
 
+    if (rest < 0) rest = 0;
+
+    const first = moneyFields[0];
+    if (first.kassa?.currency?.price) {
+        first.paid_money = rest / first.kassa.currency.price;
+    } else {
+        first.paid_money = rest;
+    }
+
+    balansePrice.value = rest;
+};
+
+const warningFunc = () => {
+    if (userData.discount > balance.value) {
+        ToastError("Chegirma summasi balansdan katta bo'lishi mumkin emas!");
+        userData.discount = balance.value;
+    }
+    recalcPayments();
+};
+
+const onKassaChange = (index) => {
+    const found = getKassInfo.value.find(k => k.Kassa.id === moneyFields[index].kassa_id);
+    if (found) {
+        moneyFields[index].kassa = found.Kassa;
+        moneyFields[index].currency_id = found.Kassa.currency_id;
+        recalcPayments();
+    }
+};
+
+const addPaymentField = async () => {
+    moneyFields.push({
+        paid_money: 0,
+        currency_id: moneyFields[0].currency_id,
+        kassa_id: moneyFields[0].kassa_id,
+        kassa: moneyFields[0].kassa
+    });
+    await nextTick();
+    recalcPayments();
+};
+
+const removePaymentField = async (index) => {
+    if (moneyFields.length > 1) {
+        moneyFields.splice(index, 1);
+        await nextTick();
+        recalcPayments();
+    }
+};
 
 const handleNasiyaChange = () => {
     showNasiyaDate.value = nasiya.value > 0;
-
-    if (nasiya.value > totalOrderAmount.value) {
-        nasiya.value = totalOrderAmount.value;
-    }
-
-    if (moneyFields.length > 0) {
-        moneyFields[0].order_money = Math.max(0, amountToPay.value);
-    }
-};
-
-watch(() => store.modalProducts, (isOpen) => {
-    if (isOpen && store.ordersBlance?.[0]?.balance) {
-        nasiya.value = 0;
-        showNasiyaDate.value = false;
-        userData.discount = 0;
-
-        const balance = store.ordersBlance[0].balance;
-        moneyFields[0].paid_money = balance;
-        moneyFields[0].order_money = balance;
-        moneyFields.splice(1);
-    }
-});
-
-const addPaymentField = () => {
-    const lastField = moneyFields[moneyFields.length - 1];
-
-    if (lastField.paid_money > 0) {
-        moneyFields.push({
-            paid_money: 0,
-            order_money: 0,
-            currency_id: store.currencyId || 0,
-            kassa_id: store.kassaId || 0
-        });
-
-        distributePayments();
-    }
-};
-
-const distributePayments = () => {
-    const remainingAmount = amountToPay.value;
-    const fieldCount = moneyFields.length;
-
-    if (fieldCount === 1) {
-        moneyFields[0].order_money = remainingAmount;
-        moneyFields[0].paid_money = remainingAmount + nasiya.value;
-    } else {
-        const amountPerField = Math.floor(remainingAmount / fieldCount);
-
-        moneyFields.forEach((field, index) => {
-            if (index === fieldCount - 1) {
-                const previousSum = moneyFields
-                    .slice(0, index)
-                    .reduce((sum, f) => sum + (f.order_money || 0), 0);
-                field.order_money = remainingAmount - previousSum;
-            } else {
-                field.order_money = amountPerField;
-            }
-
-            if (index === 0) {
-                field.paid_money = field.order_money + nasiya.value;
-            } else {
-                field.paid_money = field.order_money;
-            }
-        });
-    }
-};
-
-const removePaymentField = (index) => {
-    if (moneyFields.length > 1) {
-        // Перераспределяем сумму удаляемого поля на оставшиеся
-        const removedOrderMoney = moneyFields[index].order_money;
-        moneyFields.splice(index, 1);
-
-        // Добавляем удаленную сумму к первому полю
-        if (moneyFields.length > 0) {
-            moneyFields[0].order_money += removedOrderMoney;
-            moneyFields[0].paid_money = moneyFields[0].order_money + nasiya.value;
-        }
-    }
+    recalcPayments();
 };
 
 const confirmOrder = async () => {
-    store.ordersLoading = true;
+    warningFunc();
+        store.ordersLoading = true
+        store.loader = true
+    const totalPaid = moneyFields.reduce((s, f) => {
+        let v = Number(f.paid_money || 0);
+        if (f.kassa?.currency?.price) v *= f.kassa.currency.price;
+        return s + v;
+    }, 0);
 
-    // Проверяем и распределяем суммы перед отправкой
-    distributePayments();
+    const requiredAmount = total_price.value - Number(userData.discount || 0);
+    if (totalPaid < requiredAmount) {
+        ToastError("Недостаточная сумма оплаты");
+        return;
+    }
 
     const payload = {
         order_id: Number(store.orderId),
-        customer_name: userData.customer_name || "Mijoz",
-        customer_phone: Number(userData.customer_phone),
+        customer_name: client.value.name || userData.customer_name || "",
+        customer_phone:  Number(client.value.phone || userData.customer_phone || 0),
         discount: Number(userData.discount),
-        nasiya: Number(nasiya.value),
-        money: moneyFields.map(item => ({
-            paid_money: Number(item.paid_money),
-            order_money: Number(item.order_money),
-            currency_id: Number(item.currency_id),
-            kassa_id: Number(item.kassa_id)
+        money: moneyFields.map(f => ({
+            paid_money: Number(f.paid_money),
+            currency_id: Number(f.currency_id),
+            kassa_id: Number(f.kassa_id)
         })),
         loan_repayment_date: nasiya.value > 0 ? userData.loan_repayment_date : null,
         loan_comment: userData.loan_comment,
@@ -165,46 +186,23 @@ const confirmOrder = async () => {
     };
 
     try {
-        const res = await api.confirm_order(payload);
-        console.log("Успешно подтверждено", res);
+        await api.confirm_order(payload);
+        ToastSuccess("Order tasdiqlandi");
         store.modalProducts = false;
-        store.ordersLoading = false;
-        ToastSuccess('Order tastiqlandi');
-    } catch (error) {
-        console.error("Ошибка API:", error.response?.data);
-        store.ordersLoading = false;
-        ToastError('Xatolik yuz berdi');
+        store.ordersLoading = false
+        store.loader = false
+    } catch (err) {
+        console.error(err.response?.data);
+        ToastError("Xatolik yuz berdi");
     }
-}
-
-const getKassInfo = ref([])
-const getKassa = async () => {
-    const res = await api.get_kassa({ branch_id: store.branchId })
-    getKassInfo.value = res
-    if (res.length > 0) {
-        store.currencyId = res[0]?.Kassa?.currency_id
-        store.kassaId = res[0]?.Kassa?.id
-        moneyFields[0].currency_id = res[0]?.Kassa?.currency_id
-        moneyFields[0].kassa_id = res[0]?.Kassa?.id
-    }
-}
-
-const onKassaChange = (index) => {
-    const selectedKassa = getKassInfo.value.find(k => k.Kassa.id === moneyFields[index].kassa_id);
-    if (selectedKassa) {
-        moneyFields[index].currency_id = selectedKassa.Kassa.currency_id;
-    }
-}
-
-watch([nasiya, () => userData.discount], () => {
-    distributePayments();
-}, { immediate: true });
+};
 
 function orderFormSection1Func() {
     orderFormSection1.value = true;
     orderFormSection2.value = false;
     orderFormSection3.value = false;
 }
+
 function orderFormSection2Func() {
     orderFormSection1.value = false;
     orderFormSection2.value = true;
@@ -216,7 +214,7 @@ function orderFormSection3Func() {
     orderFormSection3.value = true;
 }
 
-onMounted(() => { getKassa() })
+watch(moneyFields, recalcPayments, { deep: true });
 </script>
 
 <template>
@@ -224,7 +222,19 @@ onMounted(() => { getKassa() })
         <ProductsModal v-model="store.modalProducts">
             <div class="modal">
                 <header class="modal-header">
-                    <h3>{{ formatUZS(totalOrderAmount) }} so'm</h3>
+                    <div class="orders-price">
+                        <span>
+                            <strong class="text-danger text-decoration-line-through" v-if="!balance == total_price">
+                                {{ formatUZS(total_price) }} so'm
+                            </strong>
+                            <strong class="varib-balance" style="color: var(--p-black)">
+                                {{ formatUZS(balance) }} so'm
+                            </strong>
+                        </span>
+                        <div>
+                            <strong>{{ formatUZS(balansePrice) }} so'm</strong>
+                        </div>
+                    </div>
                     <button class="close-btn" @click="store.modalProducts = false">&times;</button>
                 </header>
 
@@ -239,18 +249,19 @@ onMounted(() => { getKassa() })
                     </div>
 
                     <form @submit.prevent="confirmOrder()">
-                        <div class="order-confirm-form" v-if="orderFormSection1">
-                            <div class="form-top-inputs" v-for="(field, index) in moneyFields" :key="'s1' + index">
+                        <div v-if="orderFormSection1">
+                            <div v-for="(field, index) in moneyFields" :key="'s1' + index" class="form-top-inputs">
                                 <div class="form-t-inp">
                                     <label v-if="index === 0">To'lov summa</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="field.paid_money" readonly>
+                                        <input type="number" v-model.number="field.paid_money"
+                                            @input="recalcPayments" />
                                         <div class="select-option-wrp">
                                             <select v-model="field.kassa_id" @change="onKassaChange(index)">
                                                 <option v-for="kassa in getKassInfo" :key="kassa.Kassa.id"
                                                     :value="kassa.Kassa.id">
-                                                    {{ kassa?.Kassa?.name + '-' + kassa?.currency + '-' +
-                                                        kassa?.Kassa?.name }}
+                                                    {{ `${kassa.Kassa.name} - ${kassa.currency} - ${kassa?.Kassa?.type}`
+                                                    }}
                                                 </option>
                                             </select>
                                             <button type="button"
@@ -259,69 +270,42 @@ onMounted(() => { getKassa() })
                                             </button>
                                         </div>
                                     </div>
-                                    <small v-if="index === 0" style="color: #666; font-size: 12px;">
-                                        (Order: {{ formatUZS(field.order_money) }}, Nasiya: {{ formatUZS(nasiya) }})
-                                    </small>
                                 </div>
                             </div>
+
                             <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Chegirma</label>
+                                <div class="form-t-inp">
+                                    <label>Chegirma</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="userData.discount" @input="distributePayments">
+                                        <input type="number" v-model="userData.discount" @input="warningFunc()" />
+                                        <div class="input-group-text">so'm</div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Nasiya</label>
-                                    <div class="form-top-input-wrp">
-                                        <input type="number" v-model="nasiya" @input="handleNasiyaChange">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-top-inputs confirm-o-center-inp" v-if="showNasiyaDate">
-                                <div class="form-t-inp"><label>Nasiya muddati</label>
-                                    <div class="form-top-input-wrp">
-                                        <input type="date" v-model="userData.loan_repayment_date">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Hodim</label>
-                                    <div class="form-top-input-wrp">
-                                        <div class="select-option-wrp select-option-wrp-bottom">
-                                            <select>
-                                                <option :value="1">Sotuvchi</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="confirm confirm-form">
-                                <button type="submit">Tasdiqlash <img
-                                        src="@/assets/images/svg/Done_all_round.svg"></button>
                             </div>
                         </div>
 
-                        <div class="order-confirm-form" v-if="orderFormSection2">
-                            <div class="client-select s-client" id="clients-select">
-                                <label for="clients-select">Mijoz</label>
-                                <select v-model="userData.customer_name" @focus="getCustomers()">
-                                    <option v-for="clinet in getCustomersData" :value="clinet.name">
-                                        {{ clinet.name }} - {{ clinet.phone }}
+                        <div v-if="orderFormSection2">
+                            <div class="client-select">
+                                <label>Mijoz</label>
+                                <select v-model="client" @focus="getCustomers()">
+                                    <option v-for="client in getCustomersData" :key="client.id" :value="client">
+                                        {{ client.name }} - {{ client.phone }}
                                     </option>
                                 </select>
                             </div>
-                            <div class="form-top-inputs" v-for="(field, index) in moneyFields" :key="'s2' + index">
+
+                            <div v-for="(field, index) in moneyFields" :key="'s1' + index" class="form-top-inputs">
                                 <div class="form-t-inp">
                                     <label v-if="index === 0">To'lov summa</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="field.paid_money" readonly>
+                                        <input type="number" v-model.number="field.paid_money"
+                                            @input="recalcPayments" />
                                         <div class="select-option-wrp">
                                             <select v-model="field.kassa_id" @change="onKassaChange(index)">
                                                 <option v-for="kassa in getKassInfo" :key="kassa.Kassa.id"
                                                     :value="kassa.Kassa.id">
-                                                    {{ kassa?.Kassa?.name + '-' + kassa?.currency + '-' +
-                                                        kassa?.Kassa?.name }}
+                                                    {{ `${kassa.Kassa.name} - ${kassa.currency} - ${kassa?.Kassa?.type}`
+                                                    }}
                                                 </option>
                                             </select>
                                             <button type="button"
@@ -330,67 +314,58 @@ onMounted(() => { getKassa() })
                                             </button>
                                         </div>
                                     </div>
-                                    <small v-if="index === 0" style="color: #666; font-size: 12px;">
-                                        (Order: {{ formatUZS(field.order_money) }}, Nasiya: {{ formatUZS(nasiya) }})
-                                    </small>
                                 </div>
                             </div>
+
                             <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Chegirma</label>
+                                <div class="form-t-inp">
+                                    <label>Chegirma</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="userData.discount" @input="distributePayments">
+                                        <input type="number" v-model="userData.discount" @input="warningFunc()" />
+                                        <div class="input-group-text">so'm</div>
                                     </div>
                                 </div>
                             </div>
+
                             <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Nasiya</label>
+                                <div class="form-t-inp">
+                                    <label>Nasiya</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="nasiya" @input="handleNasiyaChange">
+                                        <input type="number" v-model="nasiya" @input="handleNasiyaChange" />
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-top-inputs confirm-o-center-inp" v-if="showNasiyaDate">
-                                <div class="form-t-inp"><label>Nasiya muddati</label>
+
+                            <div v-if="showNasiyaDate" class="form-top-inputs confirm-o-center-inp">
+                                <div class="form-t-inp">
+                                    <label>Nasiya muddati</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="date" v-model="userData.loan_repayment_date">
+                                        <input type="date" v-model="userData.loan_repayment_date" />
                                     </div>
                                 </div>
-                            </div>
-                            <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Hodim</label>
-                                    <div class="form-top-input-wrp">
-                                        <div class="select-option-wrp select-option-wrp-bottom">
-                                            <select>
-                                                <option :value="1">Sotuvchi</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="confirm confirm-form">
-                                <button type="submit">Tasdiqlash <img
-                                        src="@/assets/images/svg/Done_all_round.svg"></button>
                             </div>
                         </div>
 
-                        <div class="order-confirm-form" v-if="orderFormSection3">
+                        <div v-if="orderFormSection3">
                             <div class="form-top-inputs">
                                 <div class="new-inp"><label>Ism</label><input type="text"
-                                        v-model="userData.customer_name"></div>
-                                <div class="new-inp"><label>Telefon raqam</label><input type="number" placeholder="+998"
-                                        v-model="userData.customer_phone"></div>
+                                        v-model="userData.customer_name" /></div>
+                                <div class="new-inp"><label>Telefon raqam</label><input type="number"
+                                        v-model="userData.customer_phone" /></div>
                             </div>
-                            <div class="form-top-inputs" v-for="(field, index) in moneyFields" :key="'s3' + index">
+
+                            <div v-for="(field, index) in moneyFields" :key="'s3' + index" class="form-top-inputs">
                                 <div class="form-t-inp">
                                     <label v-if="index === 0">To'lov summa</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="field.paid_money" readonly>
+                                        <input type="number" v-model.number="field.paid_money"
+                                            @input="recalcPayments" />
                                         <div class="select-option-wrp">
                                             <select v-model="field.kassa_id" @change="onKassaChange(index)">
                                                 <option v-for="kassa in getKassInfo" :key="kassa.Kassa.id"
                                                     :value="kassa.Kassa.id">
-                                                    {{ kassa?.Kassa?.name + '-' + kassa?.currency + '-' +
-                                                        kassa?.Kassa?.name }}
+                                                    {{ `${kassa.Kassa.name} - ${kassa.currency} - ${kassa?.Kassa?.type}`
+                                                    }}
                                                 </option>
                                             </select>
                                             <button type="button"
@@ -399,47 +374,22 @@ onMounted(() => { getKassa() })
                                             </button>
                                         </div>
                                     </div>
-                                    <small v-if="index === 0" style="color: #666; font-size: 12px;">
-                                        (Order: {{ formatUZS(field.order_money) }}, Nasiya: {{ formatUZS(nasiya) }})
-                                    </small>
                                 </div>
                             </div>
+
                             <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Chegirma</label>
+                                <div class="form-t-inp">
+                                    <label>Chegirma</label>
                                     <div class="form-top-input-wrp">
-                                        <input type="number" v-model="userData.discount" @input="distributePayments">
+                                        <input type="number" v-model="userData.discount" @input="warningFunc()" />
+                                        <div class="input-group-text">so'm</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Nasiya</label>
-                                    <div class="form-top-input-wrp">
-                                        <input type="number" v-model="nasiya" @input="handleNasiyaChange">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-top-inputs confirm-o-center-inp" v-if="showNasiyaDate">
-                                <div class="form-t-inp"><label>Nasiya muddati</label>
-                                    <div class="form-top-input-wrp">
-                                        <input type="date" v-model="userData.loan_repayment_date">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-top-inputs confirm-o-center-inp">
-                                <div class="form-t-inp"><label>Hodim</label>
-                                    <div class="form-top-input-wrp">
-                                        <div class="select-option-wrp select-option-wrp-bottom">
-                                            <select>
-                                                <option :value="1">Sotuvchi</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="confirm confirm-form">
-                                <button type="submit">Tasdiqlash <img
-                                        src="@/assets/images/svg/Done_all_round.svg"></button>
-                            </div>
+                        </div>
+
+                        <div class="confirm confirm-form">
+                            <button type="submit">Tasdiqlash</button>
                         </div>
                     </form>
                 </div>
@@ -447,8 +397,7 @@ onMounted(() => { getKassa() })
         </ProductsModal>
 
         <div class="confirm">
-            <button @click="store.modalProducts = true">Tasdiqlash <img
-                    src="@/assets/images/svg/Done_all_round.svg"></button>
+            <button @click="store.modalProducts = true">Tasdiqlash</button>
         </div>
     </div>
 </template>

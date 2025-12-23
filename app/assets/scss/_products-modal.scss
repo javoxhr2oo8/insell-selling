@@ -2,14 +2,12 @@ $modal-bg: rgba(0, 0, 0, 0.4);
 $content-bg: white;
 $transition-bounce: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 
-.modal-overlay {
+.modal-m {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: $modal-bg;
-    backdrop-filter: blur(2px);
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -20,11 +18,15 @@ $transition-bounce: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     .modal-content {
         background: var(--bg-color);
         width: 90%;
-        max-width: 900px;
+        max-width: 600px;
         border-radius: 12px;
         padding: 20px;
         box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
-
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100%;
+        overflow: auto;
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -275,6 +277,9 @@ $transition-bounce: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 .client-select {
     width: 100%;
     margin-top: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     select {
         font-weight: 600;
         font-size: 18px;
