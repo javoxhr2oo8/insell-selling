@@ -18,23 +18,36 @@ const query = reactive({
 })
 
 const orders = ref({})
-
-const orderInfo = (item) => {
-    store.orderId = item?.Orders?.id
-    store.branchId = item?.Orders?.branch_id
-    console.log(item)
-    console.log(store.orderId)
-    console.log(store.branchId)
-}
+const isFirstRun = ref(true)
 
 const getOrders = async () => {
     store.loader = true
     const res = await api.get_orders(query).catch(err => {
         findError('signIn', err.response?.status)
     })
+
     orders.value = res?.data
-    store.orderId = orders?.data?.[0]?.Orders?.id
     store.loader = false
+
+    // 2. Логика установки ID
+    if (res?.data?.length > 0) {
+        // Если это первый запуск страницы
+        if (isFirstRun.value) {
+            store.orderId = res.data[0]?.Orders?.id
+            store.branchId = res.data[0]?.Orders?.branch_id
+            isFirstRun.value = false // Сразу выключаем, чтобы больше сюда не заходить
+        }
+        // Если вдруг orderId стал пустым (например, удалили заказ), тоже подхватываем первый
+        else if (!store.orderId) {
+            store.orderId = res.data[0]?.Orders?.id
+        }
+    }
+}
+
+const orderInfo = (item) => {
+    isFirstRun.value = false
+    store.orderId = item?.Orders?.id
+    store.branchId = item?.Orders?.branch_id
 }
 
 const createOrder = async () => {
