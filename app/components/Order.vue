@@ -42,7 +42,7 @@ const updateTrades = async () => {
     const orderId = item?.order_id || item?.Orders?.id || item?.Trades?.order_id;
     const tradeId = item?.id || item?.Trades?.id;
     store.loader = true
-
+    store.ordersLoading = true
     const payload = {
         id: tradeId,
         order_id: orderId,
@@ -56,6 +56,7 @@ const updateTrades = async () => {
         findError('signIn', err.response?.status)
     })
     store.loader = false
+    store.ordersLoading = false
 }
 
 const deleteTrade = async (tradeId) => {

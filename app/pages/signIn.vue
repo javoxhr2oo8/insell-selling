@@ -13,13 +13,24 @@ const data = reactive({
     password: ''
 })
 
+const pasType = ref(true)
+
+function cleanValue() {
+    data.username = ''
+    data.password = ''
+}
+
 const signIn = async () => {
     const phoneToSubmit = (data.username || '').replace(/\D/g, '');
     const passwordToSubmit = data.password;
 
     store.loader = true
 
-    const res = await api.token(phoneToSubmit, passwordToSubmit)
+    const res = await api.token(phoneToSubmit, passwordToSubmit).catch((err)=> {
+        ToastError(err.response._data.detail)
+        store.loader = false
+        cleanValue()
+    })
 
     if (res?.access_token) {
         localStorage.setItem('info', JSON.stringify(res))
@@ -30,9 +41,11 @@ const signIn = async () => {
         ToastSuccess('Muvofaqiyatlik')
 
         routerState('')
+        cleanValue()
 
     } else {
-        ToastError('Xatolik!')
+        ToastError(res.detail)
+        cleanValue()
     }
 
     store.loader = false
@@ -71,10 +84,10 @@ const onPhoneInput = (event) => {
                         <div class="input-field">
                             <label class="form-label">Parol</label>
                             <div class="custom-input-group">
-                                <input type="password" v-model="data.password" class="form-control-custom"
+                                <input :type="pasType ? 'password' : 'text'" v-model="data.password" class="form-control-custom"
                                     placeholder="Parol kiriting" required autocomplete="off" />
                                 <div class="password-toggle cursor">
-                                    <i class="fa-solid fa-eye"></i>
+                                    <i class="fa-solid fa-eye" @click="pasType = !pasType"></i>
                                 </div>
                             </div>
                             <div class="helper-text-end">

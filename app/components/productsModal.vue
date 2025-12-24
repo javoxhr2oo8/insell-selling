@@ -27,7 +27,7 @@ defineEmits(['update:modelValue'])
 <style scoped>
 .slide-right-enter-active,
 .slide-right-leave-active {
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
 }
 
 .slide-right-enter-from,

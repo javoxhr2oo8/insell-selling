@@ -7,6 +7,9 @@ import { useUtil } from '~/server/util';
 const customerName = ref("")
 const customerNumber = ref(0)
 
+const beforeBtn = ref(true)
+const loadingBtn = ref(false)
+
 const { findError } = useUtil()
 
 const store = useStore()
@@ -52,14 +55,14 @@ const orderInfo = (item) => {
 
 const createOrder = async () => {
     store.loader = true
-
+    beforeBtn.value = false
+    loadingBtn.value = true
     const res = await api.create_order(customerName.value, customerNumber.value).catch(err => {
         findError('signIn', err.response?.status)
     })
 
     if (res) {
         ToastSuccess('Order qo\'shildi')
-
         customerName.value = ""
         customerNumber.value = 0
 
@@ -69,6 +72,8 @@ const createOrder = async () => {
     }
 
     store.loader = false
+    beforeBtn.value = true
+    loadingBtn.value = false
 }
 
 onMounted(() => {
@@ -85,7 +90,8 @@ watch(() => store.ordersLoading, () => {
         <div class="add-order">
             <div class="container">
                 <div class="add-order-wrapper">
-                    <button @click="createOrder()" class="add-order-btn"><i class="fa fa-plus"></i></button>
+                    <button @click="createOrder()" class="add-order-btn" v-if="beforeBtn"><i class="fa fa-plus"></i></button>
+                    <button class="add-order-btn" v-if="loadingBtn"><SpinerLoader/></button>
 
                     <div class="add-order-orders">
                         <button v-for="item in orders" :key="item.Orders?.id || item.id" @click="orderInfo(item)"
