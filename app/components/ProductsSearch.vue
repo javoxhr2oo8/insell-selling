@@ -3,7 +3,6 @@ import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
 import api from '~/server/api';
 import { db } from '~/server/db';
-
 const { formatUZS, findError } = useUtil()
 
 const store = useStore()
@@ -39,7 +38,7 @@ const getCategories = async () => {
 
 const filteredProducts = ref({})
 
-const getFilteredProducts = async (id)=> {
+const getFilteredProducts = async (id) => {
     const data = {
         category_id: id,
         branch_id: store.branchId,
@@ -205,7 +204,8 @@ onMounted(async () => {
                         <button class="close-btn" @click="store.modalProductsCategory = false">&times;</button>
                     </header>
                     <div class="modal-prodcuts">
-                        <product v-for="item in getCategoriesData" @click="openProductsMenu(), getFilteredProducts(item.id)" :key="item" :item="item" />
+                        <product v-for="item in getCategoriesData"
+                            @click="openProductsMenu(), getFilteredProducts(item.id)" :key="item" :item="item" />
                     </div>
                 </div>
             </ProductsModal>
@@ -223,8 +223,46 @@ onMounted(async () => {
                     </div>
 
                     <div class="products-filtered-by-category">
-                        <div class="products-by-c">
-                            <pre>{{ filteredProducts }}</pre>
+                        <div class="product-card" v-for="(product, i) in filteredProducts" :key="product.id">
+                            <div class="card-header">
+                                <span class="product-number">№{{ i + 1 }}</span>
+                                <span class="product-code">Kodi: {{ product?.Products?.code }}</span>
+                            </div>
+
+                            <div class="card-content">
+                                <div class="info-row">
+                                    <span class="label">Kategoriya:</span>
+                                    <span class="value">{{ product?.Products?.category?.name }}</span>
+                                </div>
+
+                                <div class="info-row">
+                                    <span class="label">Artikul:</span>
+                                    <span class="value">{{ product?.Products?.product_type?.name }}</span>
+                                </div>
+
+                                <div class="info-row">
+                                    <span class="label">Marka:</span>
+                                    <span class="value">{{ product?.Products?.product_type?.name2 }}</span>
+                                </div>
+
+                                <div class="info-row highlight">
+                                    <span class="label">Qoldiq:</span>
+                                    <span class="value">{{ formatUZS(product?.Products?.quantity) }} dona</span>
+                                </div>
+
+                                <div class="info-row highlight">
+                                    <span class="label">Narx:</span>
+                                    <span class="value price">{{ formatUZS(product?.Products?.price) }} so'm</span>
+                                </div>
+                            </div>
+
+                            <button class="add-btn">
+                                <svg class="btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5"
+                                        stroke-linecap="round" />
+                                </svg>
+                                Qo'shish
+                            </button>
                         </div>
                     </div>
                 </div>
