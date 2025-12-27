@@ -3,6 +3,7 @@ import api from '~/server/api';
 import { ToastError, ToastSuccess } from '@/composables/toast';
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
+import { db } from '~/server/db';
 
 const customerName = ref("")
 const customerNumber = ref(0)
@@ -32,15 +33,20 @@ const getOrders = async () => {
     orders.value = res?.data
     store.loader = false
 
-    // 2. Логика установки ID
+    if(res?.data) {
+        db.orders.put({
+            id: 'orders',
+            list: res?.data,
+            updatedAt: new Date().toISOString()
+        })
+    }
+
     if (res?.data?.length > 0) {
-        // Если это первый запуск страницы
         if (isFirstRun.value) {
             store.orderId = res.data[0]?.Orders?.id
             store.branchId = res.data[0]?.Orders?.branch_id
-            isFirstRun.value = false // Сразу выключаем, чтобы больше сюда не заходить
+            isFirstRun.value = false
         }
-        // Если вдруг orderId стал пустым (например, удалили заказ), тоже подхватываем первый
         else if (!store.orderId) {
             store.orderId = res.data[0]?.Orders?.id
         }
@@ -90,8 +96,11 @@ watch(() => store.ordersLoading, () => {
         <div class="add-order">
             <div class="container">
                 <div class="add-order-wrapper">
-                    <button @click="createOrder()" class="add-order-btn" v-if="beforeBtn"><i class="fa fa-plus"></i></button>
-                    <button class="add-order-btn" v-if="loadingBtn"><SpinerLoader/></button>
+                    <button @click="createOrder()" class="add-order-btn" v-if="beforeBtn"><i
+                            class="fa fa-plus"></i></button>
+                    <button class="add-order-btn" v-if="loadingBtn">
+                        <SpinerLoader />
+                    </button>
 
                     <div class="add-order-orders">
                         <button v-for="item in orders" :key="item.Orders?.id || item.id" @click="orderInfo(item)"

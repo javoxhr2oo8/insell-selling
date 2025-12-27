@@ -1,9 +1,17 @@
 <script setup>
-
+const props = defineProps({
+    width: {
+        type: [Number, String],
+        default: 25
+    }
+})
 </script>
 
 <template>
-    <div class="lds-ring">
+    <div class="lds-ring" :style="{
+        width: props.width + 'px',
+        height: props.width + 'px'
+    }">
         <div></div>
         <div></div>
         <div></div>
@@ -20,16 +28,14 @@
 .lds-ring {
     display: inline-block;
     position: relative;
-    width: 25px;
-    height: 25px;
 }
 
 .lds-ring div {
     box-sizing: border-box;
     display: block;
     position: absolute;
-    width: 25px;
-    height: 25px;
+    width: 100%;
+    height: 100%;
     border: 5px solid currentColor;
     border-radius: 50%;
     animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;

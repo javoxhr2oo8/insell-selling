@@ -10,9 +10,23 @@
         color: var(--dark-color);
         cursor: pointer;
         transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 130px !important;
+            // overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         &:hover {
             opacity: 0.8;
         }
+
         &:active {
             transform: scale(0.95);
         }

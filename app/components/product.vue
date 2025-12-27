@@ -12,6 +12,6 @@ function closefunc() {
 
 <template>
     <div class="product-item">
-        <button @click="closefunc()">Mahsulot {{ item }}</button>
+        <button @click="closefunc()"><span>{{ item?.name }}</span></button>
     </div>
 </template>

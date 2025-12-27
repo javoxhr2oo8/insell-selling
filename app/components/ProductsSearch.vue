@@ -2,37 +2,120 @@
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
 import api from '~/server/api';
+import { db } from '~/server/db';
 
 const { formatUZS, findError } = useUtil()
 
 const store = useStore()
 
+const getCategoriesData = ref({})
+
+const getCategoriesOffline = async () => {
+    const getCategories = await db.categories.get('categories')
+
+    if (getCategories) {
+        getCategoriesData.value = getCategories.list
+    }
+}
+
+const getCategories = async () => {
+    const query = {
+        branch_id: store.branchId,
+        page: 0,
+        limit: 999999
+    }
+
+    const res = await api.get_categories(query)
+
+    if (res?.data) {
+        await db.categories.put({
+            id: 'categories',
+            list: res?.data,
+            updatedAt: new Date().toISOString()
+        })
+        getCategoriesOffline()
+    }
+}
+
+const filteredProducts = ref({})
+
+const getFilteredProducts = async (id)=> {
+    const data = {
+        category_id: id,
+        branch_id: store.branchId,
+        limit: 999999
+    }
+
+    const res = await api.get_filtered_products(data)
+
+    filteredProducts.value = res?.data
+}
+
 const products = ref([])
+const allProductsStore = ref([])
 const searchText = ref('')
 const searchSwitch = ref(true)
+
+const initProducts = async () => {
+    const localData = await db.products.get('all_products');
+
+    if (localData && localData.list) {
+        products.value = localData.list;
+        allProductsStore.value = localData.list;
+        console.log(allProductsStore.value)
+    } else {
+        await fetchProducts();
+    }
+};
 
 const fetchProducts = async () => {
     store.loader = true
     searchSwitch.value = false
-    const res = await api.get_products({
-        search: searchText.value,
-        limit: 20,
-        page: 0
-    }).catch(err => {
-        findError('signIn', err.response?.status)
-    })
-    console.log(res)
-    searchSwitch.value = true
-    products.value = res?.data
-    store.loader = false
+    try {
+        const res = await api.get_products({
+            all_product: true,
+            limit: 9999999,
+            page: 0
+        });
+
+        if (res?.data) {
+            await db.products.put({
+                id: 'all_products',
+                list: res.data,
+                updatedAt: new Date().toISOString()
+            });
+
+            products.value = res.data;
+        }
+    } catch (err) {
+        findError('signIn', err.response?.status);
+    } finally {
+        searchSwitch.value = true;
+        store.loader = false;
+    }
 }
 
 let timeout;
+
 const handleSearch = () => {
     clearTimeout(timeout);
+
+    const query = searchText.value.toLowerCase().trim();
+
+    if (query.length === 0) {
+        products.value = [...allProductsStore.value];
+        return;
+    }
+
     timeout = setTimeout(() => {
-        fetchProducts();
-    }, 500);
+        products.value = allProductsStore.value.filter(item => {
+            const productName = item?.Products?.product_type?.name || "";
+            const productCode = item?.Products?.code || "";
+
+            return productName.toLowerCase().includes(query) ||
+                productCode.toString().includes(query);
+        });
+    }, 150);
 };
 
 const toTrade = async (code, price) => {
@@ -63,10 +146,25 @@ const deleteOrder = async () => {
     console.log(res)
 }
 
-// async function backModalFunc() {
-//     store.modalProducts = true
-//     store.productDetailShow = false
-// }
+function openProductsMenu() {
+    store.modalProductsCategory = false
+    store.productDetailShow = true
+}
+
+function closeProductsMenu() {
+    store.modalProductsCategory = true
+    store.productDetailShow = false
+}
+
+onMounted(() => {
+    fetchProducts()
+    getCategories()
+    getCategoriesOffline()
+})
+
+onMounted(async () => {
+    await initProducts()
+})
 </script>
 
 <template>
@@ -75,19 +173,20 @@ const deleteOrder = async () => {
             <div class="container">
                 <div class="products-wrapper">
                     <div class="products-search">
-                        <input type="text" v-model="searchText" @input="handleSearch" placeholder="Mahsulot izlash">
+                        <input type="text" v-model="searchText" @input="handleSearch()" placeholder="Maxsulot izlash">
                         <button><i class="fas fa-search"></i></button>
+                        <button class="products-button" @click="store.modalProductsCategory = true">Maxsulotlar</button>
                     </div>
+
 
                     <div class="search-history" :class="{ 'activeHistory': searchText.length }" v-if="searchSwitch">
                         <ul>
-                            <h2>Natija</h2>
                             <li v-for="item in products" @click="toTrade(item?.Products?.code, item?.Products?.price)">
-                                {{ item?.Products?.product_type?.name }}</li>
+                                {{ item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}
+                            </li>
                         </ul>
                     </div>
 
-                    <!-- <button class="products-btn" @click="store.modalProducts = true">Mahsulotlar</button> -->
                     <div class="all-price">
                         <div class="all-price-left">
                             <h3>Umumiy summa: </h3>
@@ -99,23 +198,23 @@ const deleteOrder = async () => {
                 </div>
             </div>
 
-            <!-- <ProductsModal v-model="store.modalProducts">
+            <ProductsModal v-model="store.modalProductsCategory">
                 <div class="modal">
                     <header class="modal-header">
                         <h3>Mahsulotlar</h3>
-                        <button class="close-btn" @click="store.modalProducts = false">&times;</button>
+                        <button class="close-btn" @click="store.modalProductsCategory = false">&times;</button>
                     </header>
                     <div class="modal-prodcuts">
-                        <product v-for="item in 20" :key="item" :item="item" />
+                        <product v-for="item in getCategoriesData" @click="openProductsMenu(), getFilteredProducts(item.id)" :key="item" :item="item" />
                     </div>
                 </div>
-            </ProductsModal> -->
+            </ProductsModal>
 
-            <!-- <ProductsModal v-model="store.productDetailShow">
+            <ProductsModal v-model="store.productDetailShow">
                 <div class="modal">
                     <header class="modal-header">
                         <h3>Mahsuloti</h3>
-                        <button class="close-btn" @click="backModalFunc()">&times;</button>
+                        <button class="close-btn" @click="closeProductsMenu()">&times;</button>
                     </header>
 
                     <div class="products-search">
@@ -123,31 +222,13 @@ const deleteOrder = async () => {
                         <button><i class="fas fa-search"></i></button>
                     </div>
 
-                    <div class="orders product-detail-table">
-                        <div class="container">
-                            <div class="orders-wrapper">
-                                <table class="product-table">
-                                    <thead>
-                                        <tr>
-                                            <th>№</th>
-                                            <th>Kodi</th>
-                                            <th>Kategoriya</th>
-                                            <th>Artikul</th>
-                                            <th>Marka</th>
-                                            <th>Polka</th>
-                                            <th>Qoldiq</th>
-                                            <th>Narx</th>
-                                        </tr>
-                                    </thead>
-
-                                    <productDetailTable v-for="item in 10" :key="item" :item="item"/>
-
-                                </table>
-                            </div>
+                    <div class="products-filtered-by-category">
+                        <div class="products-by-c">
+                            <pre>{{ filteredProducts }}</pre>
                         </div>
                     </div>
                 </div>
-            </ProductsModal> -->
+            </ProductsModal>
         </div>
     </div>
 </template>

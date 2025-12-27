@@ -12,6 +12,9 @@ const orderFormSection1 = ref(true);
 const orderFormSection2 = ref(false);
 const orderFormSection3 = ref(false);
 
+const defaultBtn = ref(true)
+const loadingBtn = ref(false)
+
 const getCustomersData = ref({});
 
 const userData = reactive({
@@ -90,25 +93,18 @@ watch(() => store.modalProducts, (open) => {
 });
 
 const recalcPayments = () => {
-    let rest = balance.value - Number(userData.discount || 0);
+    const requiredTotal = balance.value - Number(userData.discount || 0);
 
-    moneyFields.forEach((field, index) => {
-        if (index === 0) return;
+    let totalPaidInFields = 0;
+    moneyFields.forEach((field) => {
         let paid = Number(field.paid_money || 0);
-        if (field.kassa?.currency?.price) paid *= field.kassa.currency.price;
-        rest -= paid;
+        if (field.kassa?.currency?.price) {
+            paid *= field.kassa.currency.price;
+        }
+        totalPaidInFields += paid;
     });
 
-    if (rest < 0) rest = 0;
-
-    const first = moneyFields[0];
-    if (first.kassa?.currency?.price) {
-        first.paid_money = rest / first.kassa.currency.price;
-    } else {
-        first.paid_money = rest;
-    }
-
-    balansePrice.value = rest;
+    balansePrice.value = requiredTotal - totalPaidInFields;
 };
 
 const warningFunc = () => {
@@ -154,8 +150,10 @@ const handleNasiyaChange = () => {
 
 const confirmOrder = async () => {
     warningFunc();
-        store.ordersLoading = true
-        store.loader = true
+    defaultBtn.value = false
+    loadingBtn.value = true
+    store.ordersLoading = true
+    store.loader = true
     const totalPaid = moneyFields.reduce((s, f) => {
         let v = Number(f.paid_money || 0);
         if (f.kassa?.currency?.price) v *= f.kassa.currency.price;
@@ -164,14 +162,14 @@ const confirmOrder = async () => {
 
     const requiredAmount = total_price.value - Number(userData.discount || 0);
     if (totalPaid < requiredAmount) {
-        ToastError("Недостаточная сумма оплаты");
+        ToastError("Summa yetarlik emas!");
         return;
     }
 
     const payload = {
         order_id: Number(store.orderId),
         customer_name: client.value.name || userData.customer_name || "",
-        customer_phone:  Number(client.value.phone || userData.customer_phone || 0),
+        customer_phone: Number(client.value.phone || userData.customer_phone || 0),
         discount: Number(userData.discount),
         money: moneyFields.map(f => ({
             paid_money: Number(f.paid_money),
@@ -185,15 +183,20 @@ const confirmOrder = async () => {
         service_price: 0
     };
 
+
     try {
         await api.confirm_order(payload);
         ToastSuccess("Order tasdiqlandi");
+        defaultBtn.value = true
+        loadingBtn.value = false
         store.modalProducts = false;
         store.ordersLoading = false
         store.loader = false
     } catch (err) {
         console.error(err.response?.data);
         ToastError("Xatolik yuz berdi");
+        defaultBtn.value = true
+        loadingBtn.value = false
     }
 };
 
@@ -224,15 +227,14 @@ watch(moneyFields, recalcPayments, { deep: true });
                 <header class="modal-header">
                     <div class="orders-price">
                         <span>
-                            <strong class="text-danger text-decoration-line-through" v-if="!balance == total_price">
-                                {{ formatUZS(total_price) }} so'm
-                            </strong>
                             <strong class="varib-balance" style="color: var(--p-black)">
                                 {{ formatUZS(balance) }} so'm
                             </strong>
                         </span>
                         <div>
-                            <strong>{{ formatUZS(balansePrice) }} so'm</strong>
+                            <strong v-if="balansePrice"
+                                :style="{ 'color': balansePrice < 1 ? 'red' : 'var(--dark-color)' }">Qoldiq: {{
+                                    formatUZS(balansePrice ? balansePrice : balance) }} so'm</strong>
                         </div>
                     </div>
                     <button class="close-btn" @click="store.modalProducts = false">&times;</button>
@@ -389,7 +391,10 @@ watch(moneyFields, recalcPayments, { deep: true });
                         </div>
 
                         <div class="confirm confirm-form">
-                            <button type="submit">Tasdiqlash</button>
+                            <button type="submit" v-if="defaultBtn">Tasdiqlash</button>
+                            <button type="button" v-if="loadingBtn">
+                                <spinerLoader :width="20" />
+                            </button>
                         </div>
                     </form>
                 </div>

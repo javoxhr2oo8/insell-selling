@@ -8,6 +8,9 @@ const { formatPhone, routerState } = useUtil()
 
 const store = useStore()
 
+const defaultBtn = ref(true)
+const loadingBtn = ref(false)
+
 const data = reactive({
     username: '',
     password: ''
@@ -23,15 +26,18 @@ function cleanValue() {
 const signIn = async () => {
     const phoneToSubmit = (data.username || '').replace(/\D/g, '');
     const passwordToSubmit = data.password;
-
+    defaultBtn.value = false
+    loadingBtn.value = true
     store.loader = true
 
-    const res = await api.token(phoneToSubmit, passwordToSubmit).catch((err)=> {
+    const res = await api.token(phoneToSubmit, passwordToSubmit).catch((err) => {
         ToastError(err.response._data.detail)
         store.loader = false
         cleanValue()
+        defaultBtn.value = true
+        loadingBtn.value = false
     })
-
+    
     if (res?.access_token) {
         localStorage.setItem('info', JSON.stringify(res))
 
@@ -42,13 +48,14 @@ const signIn = async () => {
 
         routerState('')
         cleanValue()
-
     } else {
         ToastError(res.detail)
         cleanValue()
     }
 
     store.loader = false
+    defaultBtn.value = true
+    loadingBtn.value = false
 }
 
 const onPhoneInput = (event) => {
@@ -84,8 +91,9 @@ const onPhoneInput = (event) => {
                         <div class="input-field">
                             <label class="form-label">Parol</label>
                             <div class="custom-input-group">
-                                <input :type="pasType ? 'password' : 'text'" v-model="data.password" class="form-control-custom"
-                                    placeholder="Parol kiriting" required autocomplete="off" />
+                                <input :type="pasType ? 'password' : 'text'" v-model="data.password"
+                                    class="form-control-custom" placeholder="Parol kiriting" required
+                                    autocomplete="off" />
                                 <div class="password-toggle cursor">
                                     <i class="fa-solid fa-eye" @click="pasType = !pasType"></i>
                                 </div>
@@ -96,7 +104,10 @@ const onPhoneInput = (event) => {
                         </div>
 
                         <div class="auth-actions">
-                            <button class="insell-btn-main" type="submit">KIRISH</button>
+                            <button class="insell-btn-main" type="submit" v-if="defaultBtn">KIRISH</button>
+                            <button class="insell-btn-main" type="button" v-if="loadingBtn" style="padding: 13px;">
+                                <spinerLoader :width="20" />
+                            </button>
                         </div>
 
                         <footer class="auth-footer">

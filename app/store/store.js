@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 
 export const useStore = defineStore('myStore', () => {
     const modalProducts = ref(false)
+    const modalProductsCategory = ref(false)
     const productDetailShow = ref(false)
     const confirPhoneNumber = ref()
     const loader = ref(false)

@@ -1,6 +1,5 @@
 .products {
     margin-top: 25px;
-
     .products-wrapper {
         width: 100%;
         display: flex;
@@ -14,7 +13,7 @@
             gap: 7px;
 
             input {
-                width: 100%;
+                width: 70%;
                 border: 2px solid var(--dark-color);
                 background: transparent;
                 padding: 17px;
@@ -114,13 +113,19 @@
 
 .search-history {
     display: none;
+    position: relative;
     h2 {
         color: var(--dark-color);
         padding: 5px 8px;
     }
 
     ul {
-        background: var(--product-table-color);
+        width: 100%;
+        height: fit-content;
+        background: var(--table-head-color);
+        z-index: 10;
+        position: absolute;
+        top: -10px;
         padding: 10px;
         display: flex;
         flex-direction: column;
@@ -140,4 +145,12 @@
 
 .activeHistory {
     display: block;
+}
+
+.products-button {
+    width: 29%;
+    font-weight: 600;
+    padding: 18px !important;
+    font-size: 21px !important;
+    color: #fff !important;
 }
