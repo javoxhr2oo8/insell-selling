@@ -1,17 +1,24 @@
 <script setup>
+import { ref, onMounted, watch } from 'vue';
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
 import api from '~/server/api';
 import { db } from '~/server/db';
-const { formatUZS, findError } = useUtil()
 
+const { formatUZS, findError } = useUtil()
 const store = useStore()
 
 const getCategoriesData = ref({})
+const filteredProducts = ref({})
+const products = ref([])
+const allProductsStore = ref([])
+const searchText = ref('')
+const searchSwitch = ref(true)
+
+let timeout;
 
 const getCategoriesOffline = async () => {
     const getCategories = await db.categories.get('categories')
-
     if (getCategories) {
         getCategoriesData.value = getCategories.list
     }
@@ -23,49 +30,27 @@ const getCategories = async () => {
         page: 0,
         limit: 999999
     }
-
     const res = await api.get_categories(query)
-
     if (res?.data) {
         await db.categories.put({
             id: 'categories',
             list: res?.data,
             updatedAt: new Date().toISOString()
         })
-        getCategoriesOffline()
+        await getCategoriesOffline()
     }
 }
-
-const filteredProducts = ref({})
-
-const getFilteredProducts = async (id) => {
-    const data = {
-        category_id: id,
-        branch_id: store.branchId,
-        limit: 999999
-    }
-
-    const res = await api.get_filtered_products(data)
-
-    filteredProducts.value = res?.data
-}
-
-const products = ref([])
-const allProductsStore = ref([])
-const searchText = ref('')
-const searchSwitch = ref(true)
 
 const initProducts = async () => {
     const localData = await db.products.get('all_products');
-
     if (localData && localData.list) {
-        products.value = localData.list;
         allProductsStore.value = localData.list;
-        console.log(allProductsStore.value)
+        products.value = localData.list;
     } else {
         await fetchProducts();
     }
 };
+
 
 const fetchProducts = async () => {
     store.loader = true
@@ -83,7 +68,7 @@ const fetchProducts = async () => {
                 list: res.data,
                 updatedAt: new Date().toISOString()
             });
-
+            allProductsStore.value = res.data;
             products.value = res.data;
         }
     } catch (err) {
@@ -94,28 +79,58 @@ const fetchProducts = async () => {
     }
 }
 
-let timeout;
+const getFilteredProducts = async (id) => {
+    const data = { category_id: id, branch_id: store.branchId, limit: 999999 }
+    const res = await api.get_filtered_products(data)
+    filteredProducts.value = res?.data
+}
 
 const handleSearch = () => {
     clearTimeout(timeout);
 
-    const query = searchText.value.toLowerCase().trim();
+    timeout = setTimeout(async () => {
+        const query = searchText.value.toLowerCase().trim();
 
-    if (query.length === 0) {
-        products.value = [...allProductsStore.value];
-        return;
-    }
+        if (query.length === 0) {
+            products.value = [...allProductsStore.value];
+            return;
+        }
 
-    timeout = setTimeout(() => {
-        products.value = allProductsStore.value.filter(item => {
-            const productName = item?.Products?.product_type?.name || "";
-            const productCode = item?.Products?.code || "";
+        const results = allProductsStore.value.filter(item => {
+            const prod = item?.Products;
+            if (!prod) return false;
 
-            return productName.toLowerCase().includes(query) ||
-                productCode.toString().includes(query);
+            if (query.length === 13 && query.startsWith('29')) {
+                const plu = prod.plu?.toString() || "";
+                return plu.includes(query.slice(0, 7));
+            } else {
+                const name = prod.product_type?.name?.toLowerCase() || "";
+                const name2 = prod.product_type?.name2?.toLowerCase() || "";
+                const category = prod.category?.name?.toLowerCase() || "";
+                const code = prod.code?.toString() || "";
+
+                return name.includes(query) || name2.includes(query) ||
+                    code.includes(query) || category.includes(query);
+            }
         });
+
+        products.value = results;
+
+        if (results.length === 1) {
+            const foundProduct = results[0];
+            const code = foundProduct.Products?.code;
+            const price = foundProduct.Products?.price;
+
+            if (code) {
+                await toTrade(code, price);
+            }
+        }
     }, 150);
 };
+
+watch(searchText, () => {
+    handleSearch();
+});
 
 const toTrade = async (code, price) => {
     store.ordersLoading = true
@@ -123,26 +138,32 @@ const toTrade = async (code, price) => {
         order_id: store.orderId,
         code: code,
         quantity: 1,
-        price: price,
+        price: price || 0,
         discount: 0
     }
-    const res = await api.to_tarde(data).catch(err => {
-        findError('signIn', err.response?.status)
-    })
-    searchText.value = ""
-    store.ordersLoading = false
-    searchSwitch.value = false
+
+    try {
+        await api.to_tarde(data);
+        searchText.value = "";
+    } catch (err) {
+        findError('signIn', err.response?.status);
+    } finally {
+        store.ordersLoading = false;
+        searchSwitch.value = true;
+    }
 }
 
 const deleteOrder = async () => {
-    store.ordersLoading = true
-    store.loader = true
-    const res = await api.remove_order(store.orderId).catch(err => {
+    store.ordersLoading = true;
+    store.loader = true;
+    try {
+        await api.remove_order(store.orderId);
+    } catch (err) {
         findError('signIn', err.response?.status)
-    })
-    store.ordersLoading = false
-    store.loader = false
-    console.log(res)
+    } finally {
+        store.ordersLoading = false;
+        store.loader = false;
+    }
 }
 
 function openProductsMenu() {
@@ -155,46 +176,39 @@ function closeProductsMenu() {
     store.productDetailShow = false
 }
 
-onMounted(() => {
-    fetchProducts()
-    getCategories()
-    getCategoriesOffline()
-})
-
 onMounted(async () => {
-    await initProducts()
+    await initProducts();
+    await getCategories();
 })
 </script>
 
 <template>
     <div>
         <div class="products">
-            <div class="container">
-                <div class="products-wrapper">
-                    <div class="products-search">
-                        <input type="text" v-model="searchText" @input="handleSearch()" placeholder="Maxsulot izlash">
-                        <button><i class="fas fa-search"></i></button>
-                        <button class="products-button" @click="store.modalProductsCategory = true">Maxsulotlar</button>
-                    </div>
+            <div class="products-wrapper">
+                <div class="products-search">
+                    <input type="text" v-model="searchText" @input="handleSearch()" placeholder="Maxsulot izlash">
+                    <!-- <button><i class="fas fa-search"></i></button> -->
+                    <button class="products-button" @click="store.modalProductsCategory = true">Maxsulotlar</button>
+                </div>
 
 
-                    <div class="search-history" :class="{ 'activeHistory': searchText.length }" v-if="searchSwitch">
-                        <ul>
-                            <li v-for="item in products" @click="toTrade(item?.Products?.code, item?.Products?.price)">
-                                {{ item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}
-                            </li>
-                        </ul>
-                    </div>
+                <div class="search-history" :class="{ 'activeHistory': searchText.length }" v-if="searchSwitch">
+                    <ul>
+                        <li v-for="item in products" @click="toTrade(item?.Products?.code, item?.Products?.price)">
+                            {{ item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}
+                        </li>
+                    </ul>
+                </div>
 
-                    <div class="all-price">
+                <!-- <div class="all-price">
                         <div class="all-price-left">
                             <h3>Umumiy summa: </h3>
                             <h2>{{ formatUZS(store.ordersBlance?.[0]?.balance) }} so'm</h2>
                         </div>
-                        <button @click="deleteOrder()"><i class="fa-solid fa-trash"></i></button>
-                    </div>
+                        <button @click="deleteOrder()"><i class="fa-solid fa-xmark"></i></button>
+                    </div> -->
 
-                </div>
             </div>
 
             <ProductsModal v-model="store.modalProductsCategory">

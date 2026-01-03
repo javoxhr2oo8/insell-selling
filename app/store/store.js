@@ -18,6 +18,7 @@ export const useStore = defineStore('myStore', () => {
     const customerPhone = ref()
     const currencyId = ref()
     const kassaId = ref()
+    const ordinalNumber = ref()
     return { 
         modalProducts,
         productDetailShow,

@@ -42,3 +42,7 @@ body {
     width: 100%;
     padding: 0 25px;
 }
+
+.Vue-Toastification__toast--success {
+    background: var(--pr-color) !important;
+}

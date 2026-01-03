@@ -24,11 +24,11 @@ onMounted(() => {
     tradesGet()
 })
 
-watch(()=> store.ordersLoading, ()=> {
+watch(() => store.ordersLoading, () => {
     tradesGet()
 })
 
-watchEffect(()=> {
+watchEffect(() => {
     tradesGet()
 })
 </script>
@@ -38,21 +38,25 @@ watchEffect(()=> {
         <div class="orders">
             <div class="container">
                 <div class="orders-wrapper">
-                    <table class="product-table">
-                        <thead>
-                            <tr>
-                                <th>№</th>
-                                <th>Mahsulot</th>
-                                <th>Hajm</th>
-                                <th>Narx</th>
-                                <th>Chegirma</th>
-                                <th>To'lov</th>
-                            </tr>
-                        </thead>
+                    <ProductsSearch />
+                    <div class="table-wrapper">
+                        <table class="product-table">
+                            <thead>
+                                <tr>
+                                    <th><i class="fas fa-bars"></i></th>
+                                    <th>Mahsulot</th>
+                                    <th>Hajm</th>
+                                    <th>Narx</th>
+                                    <!-- <th>Chegirma</th> -->
+                                    <th>To'lov</th>
+                                </tr>
+                            </thead>
 
-                        <Order v-for="(item, i) in getTrades" :key="item" :item="item" :index="i" />
+                            <Order v-for="(item, i) in getTrades" :key="item" :item="item" :index="i"
+                                :total="getTrades.length" />
 
-                    </table>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

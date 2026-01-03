@@ -38,6 +38,6 @@ if (process.client) {
 <template>
   <div>
     <NuxtLayout />
-    <loader v-if="store.loader" />
+    <!-- <loader v-if="store.loader" /> -->
   </div>
 </template>

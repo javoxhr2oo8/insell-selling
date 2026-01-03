@@ -1,5 +1,5 @@
 .header {
-    padding: 25px 0 70px;
+    padding: 30px 0 90px;
     position: fixed;
     top: 0;
     left: 0;
@@ -7,6 +7,7 @@
     height: 70px;
     background: var(--bg-color);
     z-index: 999;
+
     .header-wrapper {
         display: flex;
         align-items: center;
@@ -19,15 +20,27 @@
                 gap: 10px;
 
                 img {
-                    width: 150px;
+                    width: 200px;
                     display: flex;
                 }
 
                 h2 {
                     font-weight: 600;
-                    font-size: 28px;
+                    font-size: 42px;
                     margin-top: 10.5px;
                     color: var(--pr-color);
+
+                    @media screen and (max-width: 1235px) {
+                        font-size: 35px;
+                    }
+
+                    @media screen and (max-width: 1215px) {
+                        font-size: 30px;
+                    }
+
+                    @media screen and (max-width: 1164px) {
+                        display: none;
+                    }
                 }
             }
         }
@@ -90,9 +103,52 @@
     display: flex;
     flex-direction: column;
     gap: 5px;
+
     span {
         font-weight: 400;
         color: var(--dark-color) !important;
         font-size: 20px;
+    }
+}
+
+.header-actions-and-clock {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.header-back-btn-and-title {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+
+    h1 {
+        font-size: 48px;
+        color: var(--pr-color);
+    }
+
+    button {
+        width: 70px;
+        padding: 19px 10px;
+        border-radius: 10px;
+        border: none;
+        background: var(--pr-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &:hover {
+            opacity: 0.8;
+        }
+
+        &:active {
+            transform: scale(98%);
+        }
+
+        img {
+            width: 20px;
+        }
     }
 }

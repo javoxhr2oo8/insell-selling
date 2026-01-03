@@ -4,6 +4,7 @@ import { useStore } from '~/store/store';
 
 const store = useStore()
 
+
 const data = reactive({
     branch_id: store.branchId,
     role: 'seller',
@@ -18,7 +19,6 @@ const getUsers = async () => {
     store.customerPhone = res?.data[0]?.phone
 }
 
-
 onMounted(() => {
     getUsers()
 })
@@ -28,10 +28,22 @@ onMounted(() => {
     <div>
         <Header />
         <AddOrder />
-        <ProductsSearch />
-        <Orders />
-        <confirm />
+        <div class="orders-and-total-price-wrapper">
+            <Orders class="orders-component" />
+            <RightSections/>
+        </div>
+        <!-- <confirm /> -->
     </div>
 </template>
 
-<style></style>
+<style>
+.orders-and-total-price-wrapper {
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.orders-component {
+    width: 100%;
+}
+</style>

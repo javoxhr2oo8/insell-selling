@@ -3,7 +3,7 @@ import { useUtil } from '~/server/util';
 import { useStore } from '~/store/store';
 import api from '~/server/api';
 
-const { item } = defineProps(['item', 'index'])
+const { item } = defineProps(['item', 'index', 'total'])
 
 // const saleSwitch = ref(item?.Trades?.discount ? true : false)
 const saleSwitch = ref(false)
@@ -141,7 +141,7 @@ function discountFunc() {
 <template>
     <tbody>
         <tr>
-            <td>{{ index + 1 }}</td>
+            <td>{{ total - index }}</td>
 
             <td @click="editNameAndCategory = true">
                 {{ item?.Trades?.product?.product_type?.name2 }} - {{ item?.Trades?.product?.product_type?.name }}
@@ -169,7 +169,7 @@ function discountFunc() {
                 </form>
             </td>
 
-            <td>
+            <!-- <td>
                 <form class="discount-form" @submit.prevent="discountFunc()">
                     <div v-if="saleSwitch" class="discount-wrapper" style="display: flex; gap: 5px;">
                         <input type="text" class="discount-input" placeholder="0" v-model="displayDiscount" />
@@ -184,7 +184,7 @@ function discountFunc() {
                         <i class="fa-solid fa-angle-right" :class="{ 'fa-angle-left': saleSwitch }"></i>
                     </button>
                 </form>
-            </td>
+            </td> -->
 
             <td>
                 <div class="prs">
@@ -198,7 +198,7 @@ function discountFunc() {
             </td>
         </tr>
         <button class="remove-trade-btn" @click="deleteTrade(item?.Trades?.id)"><i
-                class="fa-solid fa-trash"></i></button>
+                class="fa-solid fa-xmark"></i></button>
     </tbody>
 
     <productsModal v-model="editNameAndCategory">

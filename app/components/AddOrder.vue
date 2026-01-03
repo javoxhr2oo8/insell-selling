@@ -24,16 +24,25 @@ const query = reactive({
 const orders = ref({})
 const isFirstRun = ref(true)
 
+
+const getOrdersOffline = async () => {
+    const getData = await db.orders.get('orders')
+    if (getData.list) {
+        orders.value = getData.list
+        store.ordinalNumber = getData.list[0].Orders?.ordinal_number
+    }
+}
+
 const getOrders = async () => {
     store.loader = true
     const res = await api.get_orders(query).catch(err => {
         findError('signIn', err.response?.status)
     })
 
-    orders.value = res?.data
+    // orders.value = res?.data
     store.loader = false
 
-    if(res?.data) {
+    if (res?.data) {
         db.orders.put({
             id: 'orders',
             list: res?.data,
@@ -51,6 +60,8 @@ const getOrders = async () => {
             store.orderId = res.data[0]?.Orders?.id
         }
     }
+
+    getOrdersOffline()
 }
 
 const orderInfo = (item) => {
@@ -60,30 +71,84 @@ const orderInfo = (item) => {
 }
 
 const createOrder = async () => {
-    store.loader = true
-    beforeBtn.value = false
-    loadingBtn.value = true
-    const res = await api.create_order(customerName.value, customerNumber.value).catch(err => {
-        findError('signIn', err.response?.status)
-    })
+    // store.loader = true
+    // beforeBtn.value = false
+    // loadingBtn.value = true
 
-    if (res) {
-        ToastSuccess('Order qo\'shildi')
-        customerName.value = ""
-        customerNumber.value = 0
+    // const res = await api.create_order(customerName.value, customerNumber.value).catch(err => {
+    //     findError('signIn', err.response?.status)
+    // })
 
-        await getOrders()
-    } else {
-        ToastError('Xatolik юз берди')
-    }
+    const existingData = await db.createOrderOffline.get('createOrderOffline');
 
-    store.loader = false
-    beforeBtn.value = true
-    loadingBtn.value = false
+    const currentList = existingData?.list || [];
+
+    const newOrder = {
+        id: Date.now(),
+        data: {
+            customer_name: customerName.value,
+            customer_phone: customerNumber.value
+        },
+        status: 'pending',
+        createdAt: new Date().toISOString()
+    };
+
+    const updatedList = [...currentList, newOrder];
+
+    console.log('Заказ сохранен офлайн. Всего заказов:', updatedList.length);
+
+    // if (res) {
+    //     ToastSuccess('Order qo\'shildi')
+    //     customerName.value = ""
+    //     customerNumber.value = 0
+
+    //     await getOrders()
+    // } else {
+    //     ToastError('Xatolik юз берди')
+    // }
+
+    // store.loader = false
+    // beforeBtn.value = true
+    // loadingBtn.value = false
 }
+
+const offlineOrders = ref({})
+
+const getCreatedOrders = async ()=> {
+    const dataCreatedOff = await db.createOrderOffline.get('createOrderOffline');
+    if(dataCreatedOff) {
+        offlineOrders.value = dataCreatedOff.list
+    }
+}
+
+const createOrderOffline = async () => {
+    const existingData = await db.createOrderOffline.get('createOrderOffline');
+
+    const currentList = existingData?.list || [];
+
+    const newOrder = {
+        customer_name: customerName.value,
+        customer_phone: customerNumber.value,
+        createdAt: new Date().toISOString()
+    };
+
+    const updatedList = [...currentList, newOrder];
+
+    await db.createOrderOffline.put({
+        id: 'createOrderOffline',
+        list: updatedList,
+        updatedAt: new Date().toISOString()
+    });
+
+    console.log('Заказ реально сохранен в БД. Всего в очереди:', updatedList.length);
+
+    getCreatedOrders()
+};
 
 onMounted(() => {
     getOrders()
+    getOrdersOffline()
+    getCreatedOrders()
 })
 
 watch(() => store.ordersLoading, () => {
@@ -96,17 +161,19 @@ watch(() => store.ordersLoading, () => {
         <div class="add-order">
             <div class="container">
                 <div class="add-order-wrapper">
-                    <button @click="createOrder()" class="add-order-btn" v-if="beforeBtn"><i
-                            class="fa fa-plus"></i></button>
+                    <button @click="createOrderOffline()" class="add-order-btn" v-if="beforeBtn">
+                        <i class="fa fa-plus"></i>
+                    </button>
                     <button class="add-order-btn" v-if="loadingBtn">
                         <SpinerLoader />
                     </button>
 
                     <div class="add-order-orders">
-                        <button v-for="item in orders" :key="item.Orders?.id || item.id" @click="orderInfo(item)"
+                        <button v-for="item in orders" :key="item.Orders?.id || item.id" @click="orderInfo(item), store.ordinalNumber = item.Orders?.ordinal_number"
                             :class="{ 'active-order': store.orderId === item.Orders?.id }">
-                            {{ item.Orders?.ordinal_number }}
+                            {{ item.Orders?.ordinal_number }} <span>{{ store.orderId === item.Orders?.id ? ' - ' : '' }}</span> <span>{{ store.orderId === item.Orders?.id ? 'Buyurtma' : ''}}</span>
                         </button>
+                        <button v-for="(item, i) in offlineOrders">{{ i + 1 }}</button>
                     </div>
                 </div>
             </div>
