@@ -170,7 +170,7 @@ onMounted(async () => {
                     <div class="modal-prodcuts">
                         <product v-for="item in getCategoriesData"
                             @click="openProductsMenu(), getFilteredProductsOffline(item.id)" :key="item.id"
-                            :item="item" />
+                            :item="item"/>
                     </div>
                 </div>
             </ProductsModal>

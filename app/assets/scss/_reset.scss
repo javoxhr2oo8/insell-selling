@@ -19,6 +19,7 @@ body {
     // background-image: url('../images/jpg/bg-img.jpg');
     background-repeat: no-repeat;
     background-size: cover;
+
     &.dark {
         --bg-color: #1f1e1e;
         --body-color: #1f1e1e;
@@ -28,11 +29,17 @@ body {
         --product-table-color: #2a2929;
         --tr-hover-color: #343333;
         --table-q-btn-color: #2f2e2e;
+        --header-bg: #1f1e1e;
     }
 
     &.light {
         --bg-color: #fff;
-        --body-color: linear-gradient(145deg, #ffe8c8, #fcd39a);
+        // --body-color: linear-gradient(145deg, #ffe8c8, #fcd39a);
+        --header-bg: #ffe8c8;
+        --body-color: linear-gradient(180deg,
+                #FFF1E6 0%,
+                #FFD6AD 50%,
+                #FFB980 100%);
         --dark-color: #111827;
         --table-head-color: #f9fafb;
         --table-color: #111827;
