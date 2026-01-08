@@ -2,34 +2,28 @@
 import { useStore } from '~/store/store';
 import { useUtil } from './server/util';
 
-const router = useRouter()
-
 const store = useStore()
-
 const { routerState } = useUtil()
 
-const tokenCookie = useCookie('access_token', {
-  maxAge: 60 * 60 * 24 * 7,
-  sameSite: 'lax',
-  path: '/'
-});
+const tokenCookie = useCookie('access_token');
+
+if (tokenCookie.value) {
+  store.token = tokenCookie.value;
+}
 
 if (process.client) {
   const savedData = localStorage.getItem('info');
-  let tokenInfo = null;
-
-  try {
-    tokenInfo = savedData ? JSON.parse(savedData) : null;
-  } catch (e) {
-    console.error("Failed to parse auth data", e);
+  if (savedData) {
+    try {
+      const tokenInfo = JSON.parse(savedData);
+      store.userInfo = tokenInfo;
+      if (!store.token) store.token = tokenInfo.access_token;
+    } catch (e) {
+      console.error("Failed to parse auth data", e);
+    }
   }
 
-  if (tokenInfo && tokenInfo.access_token) {
-    store.token = tokenInfo.access_token;
-    store.userInfo = tokenInfo;
-    tokenCookie.value = tokenInfo.access_token;
-    routerState('');
-  } else {
+  if (!tokenCookie.value) {
     routerState('signIn');
   }
 }
