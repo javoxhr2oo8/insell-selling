@@ -1,3 +1,6 @@
+import { db } from "./db";
+import { useStore } from "~/store/store";
+
 export const useUtil = () => {
     const formatPhone = (val) => {
         const num = val.replace(/\D/g, '').substring(0, 9);
@@ -9,6 +12,7 @@ export const useUtil = () => {
     };
 
     const router = useRouter()
+    const store = useStore()
 
     const routerState = (page) => {
         router.push(`/${page}`)
@@ -32,11 +36,147 @@ export const useUtil = () => {
         }).format(amount);
     }
 
+    function formatPhoneUZ(phone) {
+        if (!phone) return '';
+
+        let digits = phone.toString().replace(/\D/g, '');
+
+        if (digits.length === 9) {
+            digits = '998' + digits;
+        }
+        if (!digits.startsWith('998')) {
+            return '+' + digits;
+        }
+
+        return `+998 ${digits.slice(3, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 10)} ${digits.slice(10, 12)}`;
+    }
+
+    const focusInput = (id) => {
+        const input = document.getElementById(id)
+        input?.focus()
+    }
+
+    const saveRegularProduct = async (incomingProduct) => {
+        try {
+            store.updateRegularProducts = true
+            const rawData = JSON.parse(JSON.stringify(incomingProduct));
+
+            const productId = rawData.Products?.id || rawData.id || rawData.productId;
+
+            if (!productId) throw new Error("Продукт должен иметь поле 'id' для переключения");
+
+            const record = await db.regular_products.get('regular_products');
+            let productList = record?.list || [];
+
+            const productIndex = productList.findIndex(p =>
+                p.id === productId || p.Products?.id === productId || p.productId === productId
+            );
+
+            store.updateRegularProducts = false
+
+            if (productIndex === -1) {
+                const productToAdd = {
+                    ...rawData,
+                    isActive: true,
+                    savedAt: new Date().toISOString(),
+                    order: productList.length
+                };
+
+                productList.push(productToAdd);
+                await db.regular_products.put({
+                    id: 'regular_products',
+                    list: productList,
+                    updatedAt: new Date().toISOString()
+                });
+
+                return { added: true, product: productToAdd };
+
+            } else {
+                const removedProduct = productList.splice(productIndex, 1)[0];
+                await db.regular_products.put({
+                    id: 'regular_products',
+                    list: productList,
+                    updatedAt: new Date().toISOString()
+                });
+
+                return { added: false, product: removedProduct };
+            }
+
+        } catch (error) {
+            throw error;
+        }
+    };
+
+    const reorderRegularProducts = async (draggedId, targetId) => {
+        try {
+            store.updateRegularProducts = true
+
+            const record = await db.regular_products.get('regular_products');
+            if (!record?.list) return false;
+
+            let productList = [...record.list];
+
+            const draggedIndex = productList.findIndex(p =>
+                p.Products?.id === draggedId || p.id === draggedId
+            );
+            const targetIndex = productList.findIndex(p =>
+                p.Products?.id === targetId || p.id === targetId
+            );
+
+            if (draggedIndex === -1 || targetIndex === -1) {
+                return false;
+            }
+
+            [productList[draggedIndex], productList[targetIndex]] =
+                [productList[targetIndex], productList[draggedIndex]];
+
+            productList.forEach((item, index) => {
+                item.order = index;
+            });
+
+            await db.regular_products.put({
+                id: 'regular_products',
+                list: productList,
+                updatedAt: new Date().toISOString()
+            });
+
+            store.updateRegularProducts = false;
+            return true;
+
+        } catch (error) {
+            store.updateRegularProducts = false;
+            console.error('❌ Ошибка при перетаскивании:', error);
+            throw error;
+        }
+    };
+
+    const getSortedRegularProducts = async () => {
+        try {
+            const record = await db.regular_products.get('regular_products');
+            if (!record?.list) return [];
+
+            return [...record.list].sort((a, b) => {
+                const orderA = a.order || 0;
+                const orderB = b.order || 0;
+                return orderA - orderB;
+            });
+
+        } catch (error) {
+            console.error('Ошибка получения списка:', error);
+            return [];
+        }
+    };
+
     return {
         formatPhone,
         routerState,
         findError,
-        formatUZS
+        formatUZS,
+        formatPhoneUZ,
+        focusInput,
+        saveRegularProduct,
+        reorderRegularProducts,
+        getSortedRegularProducts
     }
 }
 

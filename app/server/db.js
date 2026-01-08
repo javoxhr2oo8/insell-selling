@@ -7,5 +7,11 @@ db.version(1).stores({
   orders: 'id',
   categories: 'id',
   createOrderOffline: 'id',
-  get_all_products: 'id'
+  get_all_products: 'id',
+  regular_products: 'id',
+  get_customers: 'id'
+});
+
+db.version(2).stores({
+  offlineTrades: 'id, updatedAt'
 });

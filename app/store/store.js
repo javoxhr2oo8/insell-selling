@@ -19,6 +19,12 @@ export const useStore = defineStore('myStore', () => {
     const currencyId = ref()
     const kassaId = ref()
     const ordinalNumber = ref()
+    const tradesId = ref("")
+    const updateOrders = ref(false)
+    const totalPriceOffline = ref()
+    const offlineOrdersList = []
+    const updateTrade = ref(false)
+    const updateRegularProducts = ref(false)
     return { 
         modalProducts,
         productDetailShow,
@@ -35,6 +41,13 @@ export const useStore = defineStore('myStore', () => {
         customerName,
         customerPhone,
         currencyId,
-        kassaId
+        kassaId,
+        ordinalNumber,
+        tradesId,
+        updateOrders,
+        totalPriceOffline,
+        offlineOrdersList,
+        updateTrade,
+        updateRegularProducts
      }
 })

@@ -5,7 +5,10 @@
     left: 0;
     width: 100%;
     height: 70px;
-    background: var(--bg-color);
+    background: var(--body-color);
+    // background-image: url('../images/jpg/bg-img.jpg');
+    background-repeat: no-repeat;
+    background-size: cover;
     z-index: 999;
 
     .header-wrapper {
@@ -23,25 +26,24 @@
                     width: 200px;
                     display: flex;
                 }
+            }
+        }
 
-                h2 {
-                    font-weight: 600;
-                    font-size: 42px;
-                    margin-top: 10.5px;
-                    color: var(--pr-color);
+        .main-title {
+            font-weight: 600;
+            font-size: 45px;
+            color: var(--pr-color);
 
-                    @media screen and (max-width: 1235px) {
-                        font-size: 35px;
-                    }
+            @media screen and (max-width: 1235px) {
+                font-size: 35px;
+            }
 
-                    @media screen and (max-width: 1215px) {
-                        font-size: 30px;
-                    }
+            @media screen and (max-width: 1215px) {
+                font-size: 30px;
+            }
 
-                    @media screen and (max-width: 1164px) {
-                        display: none;
-                    }
-                }
+            @media screen and (max-width: 1164px) {
+                display: none;
             }
         }
 
@@ -56,6 +58,29 @@
                 cursor: pointer;
                 padding: 11px 14px;
                 border-radius: 5px;
+                position: relative;
+                span {
+                    width: 25px;
+                    height: 25px;
+                    font-size: 16px;
+                    border-radius: 50%;
+                    color: #fff;
+                    background: var(--pr-color);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    position: absolute;
+                    top: -3px;
+                    right: 0;
+                }
+
+                &:nth-child(2) {
+                    &:hover {
+                        .keyboard-com-to-mode {
+                            display: flex;
+                        }
+                    }
+                }
 
                 &:last-child {
                     background: var(--pr-color);

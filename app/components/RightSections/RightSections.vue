@@ -1,89 +1,210 @@
 <script setup>
 import { db } from '~/server/db';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
+import { useStore } from '~/store/store';
+import { useUtil } from '~/server/util';
+import { ToastError } from '@/composables/toast';
+import DropDown from '../elements/dropDown.vue';
+import DoubleInput from '../elements/doubleInput.vue';
 
+const store = useStore();
+const { formatUZS, getSortedRegularProducts } = useUtil();
+
+const sortedProducts = ref([]);
+const customers = ref([]);
+const searchCustomers = ref("");
 const activeSection = ref('INDEX');
+const openSearchSwitch = ref(false);
+const usersAdd = ref(false);
+const defaultBtn = ref(true);
+const loadingBtn = ref(false);
 
-const openSearchSwitch = ref(false)
-const AllProductsget = ref({})
+const userData = reactive({
+    customer_name: '',
+    customer_phone: 0,
+    discount: 0,
+    loan_repayment_date: new Date().toISOString().substr(0, 10),
+    loan_comment: ''
+});
 
-const SectionIndexSwitch = computed({
-    get: () => activeSection.value === 'INDEX',
-    set: (val) => { if (!val) activeSection.value = 'CLOSED' }
-})
+const nasiya = ref(0);
+const showNasiyaDate = ref(false);
+const balance = ref(0);
+const getTotlePriceCash = ref(0);
+const getTotlePriceCard = ref(0);
 
-const SectionIndexConfirmSwitch = computed({
-    get: () => activeSection.value === 'CONFIRM',
-    set: (val) => { if (!val) activeSection.value = 'INDEX' }
-})
+const hasOrder = computed(() => {
+    return store.isOfflineOrder ? (store.totalPriceOffline || 0) > 0 : (store.ordersBlance?.[0]?.balance || 0) > 0;
+});
 
-const sectionDiscountSwitch = computed({
-    get: () => activeSection.value === 'DISCOUNT',
-    set: (val) => { if (!val) activeSection.value = 'CONFIRM' }
-})
+const displayTotal = computed(() => {
+    return store.isOfflineOrder ? (store.totalPriceOffline || 0) : (store.ordersBlance?.[0]?.balance || 0);
+});
 
-const nasiyaSectionSwitch = computed({
-    get: () => activeSection.value === 'NASIYA',
-    set: (val) => { if (!val) activeSection.value = 'CONFIRM' }
-})
+const amountAfterDiscount = computed(() => {
+    return Math.max(0, displayTotal.value - userData.discount);
+});
 
-const lastBtnBackToOpenSectionSwitch = computed(() => activeSection.value === 'CLOSED')
+const finalPayable = computed(() => {
+    return Math.max(0, amountAfterDiscount.value - nasiya.value);
+});
 
-const getAllProducts = async () => {
-    const localData = await db.products.get('all_products');
-    if (localData) {
-        AllProductsget.value = localData.list
+function applyDiscountPercent(percent) {
+    userData.discount = Math.round((displayTotal.value * percent) / 100);
+}
+
+function applyPercentDiscount(event) {
+    const percent = parseFloat(event.target.value);
+    if (!isNaN(percent)) {
+        userData.discount = Math.round((displayTotal.value * percent) / 100);
     }
 }
 
-function swicthFuncForConfirm() {
-    activeSection.value = 'CONFIRM'
+function warningFunc() {
+    if (userData.discount > displayTotal.value) {
+        userData.discount = displayTotal.value;
+        ToastError("Chegirma summadan ko'p bo'lishi mumkin emas!");
+    }
 }
 
-function swicthFuncBackFromConfirm() {
-    activeSection.value = 'INDEX'
+function handleNasiyaChange() {
+    if (nasiya.value > amountAfterDiscount.value) {
+        nasiya.value = amountAfterDiscount.value;
+        ToastError("Nasiya summasi qolgan summadan ko'p bo'lishi mumkin emas!");
+    }
+    showNasiyaDate.value = nasiya.value > 0;
 }
 
-function closeAllSectionsFunc() {
-    activeSection.value = 'CLOSED'
+function funcForCash() {
+    getTotlePriceCash.value = finalPayable.value;
+    getTotlePriceCard.value = 0;
 }
 
-function openFirstSection() {
-    activeSection.value = 'INDEX'
+function funcForCard() {
+    getTotlePriceCard.value = finalPayable.value;
+    getTotlePriceCash.value = 0;
 }
 
-function openDiscountSection() {
-    activeSection.value = 'DISCOUNT'
+function swicthFuncForConfirm() { activeSection.value = 'CONFIRM'; }
+function openDiscountSection() { balance.value = displayTotal.value; activeSection.value = 'DISCOUNT'; }
+function openNasiyaSectionSwitch() { balance.value = displayTotal.value; activeSection.value = 'NASIYA'; }
+function backFromDiscountFunc() { activeSection.value = 'CONFIRM'; }
+function swicthFuncBackFromConfirm() { activeSection.value = 'INDEX'; }
+function closeAllSectionsFunc() { activeSection.value = 'CLOSED'; }
+function openFirstSection() { activeSection.value = 'INDEX'; }
+
+const SectionIndexSwitch = computed({ get: () => activeSection.value === 'INDEX', set: (val) => { if (!val) activeSection.value = 'CLOSED' } });
+const SectionIndexConfirmSwitch = computed({ get: () => activeSection.value === 'CONFIRM', set: (val) => { if (!val) activeSection.value = 'INDEX' } });
+const sectionDiscountSwitch = computed({ get: () => activeSection.value === 'DISCOUNT', set: (val) => { if (!val) activeSection.value = 'CONFIRM' } });
+const nasiyaSectionSwitch = computed({ get: () => activeSection.value === 'NASIYA', set: (val) => { if (!val) activeSection.value = 'CONFIRM' } });
+const lastBtnBackToOpenSectionSwitch = computed(() => activeSection.value === 'CLOSED');
+
+const loadProducts = async () => { sortedProducts.value = await getSortedRegularProducts(); }
+const getCustomersOffline = async () => {
+    const data = await db.get_customers.get('get_customers');
+    if (data) customers.value = data.list;
 }
 
-function backFromDiscountFunc() {
-    activeSection.value = 'CONFIRM'
-}
+const filteredCustomers = computed(() => {
+    if (!searchCustomers.value) return customers.value;
+    const q = searchCustomers.value.toLowerCase();
+    return customers.value.filter(user => (user.name?.toLowerCase().includes(q) || user.phone?.toString().includes(q)));
+});
 
-function openNasiyaSectionSwitch() {
-    activeSection.value = 'NASIYA'
+const confirmOrder = async () => {
+    console.log({
+        total: displayTotal.value,
+        discount: userData.discount,
+        nasiya: nasiya.value,
+        cash: getTotlePriceCash.value,
+        card: getTotlePriceCard.value,
+        loan_date: userData.loan_repayment_date
+    });
+};
+
+onMounted(() => {
+    loadProducts();
+    getCustomersOffline();
+});
+
+
+const handleProductsUpdated = () => {
+    loadProducts();
 }
 
 onMounted(() => {
-    getAllProducts()
+    loadProducts();
+    getCustomersOffline();
+
+    window.addEventListener('regular-products-updated', handleProductsUpdated);
+    window.addEventListener('regular-products-reordered', handleProductsUpdated);
+})
+
+onUnmounted(() => {
+    window.removeEventListener('regular-products-updated', handleProductsUpdated);
+    window.removeEventListener('regular-products-reordered', handleProductsUpdated);
+})
+
+watch(() => store.updateRegularProducts, () => {
+    handleProductsUpdated()
 })
 </script>
 
 <template>
-    <SectionIndex v-model="SectionIndexSwitch">
+    <SectionIndex v-model="SectionIndexSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
         <template #back-btn>
-            <button @click="closeAllSectionsFunc()">
-                <img src="../../assets/images/png/back-icon-orange.png" alt="">
-            </button>
+            <button @click="closeAllSectionsFunc()"><img src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
-
         <span class="regular-products-title">Doimiy mahsulotlar:</span>
         <div class="regualr-products-wrapper">
-            <RegularProduct v-for="item in AllProductsget" :key="item.id" :product="item" />
+            <RegularProduct v-for="(product, index) in sortedProducts" :key="product.id" :product="product"
+                :index="index" />
+        </div>
+        <template #footer-actions>
+            <button class="payment-footer-btn" @click="swicthFuncForConfirm()" :disabled="!hasOrder">To'lov</button>
+            <div class="footer-bottom-actions">
+                <button @click="openDiscountSection()" :disabled="!hasOrder"><i class="fas fa-tag"></i></button>
+                <button @click="openNasiyaSectionSwitch()" :disabled="!hasOrder"><i
+                        class="fas fa-calendar"></i></button>
+            </div>
+        </template>
+    </SectionIndex>
+
+    <SectionIndex v-model="SectionIndexConfirmSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
+        <template #back-btn>
+            <button @click="swicthFuncBackFromConfirm()"><img
+                    src="../../assets/images/png/back-icon-orange.png"></button>
+        </template>
+
+        <div class="users-info">
+            <button @click="openSearchSwitch = !openSearchSwitch, usersAdd = false">Mijozlar</button>
+            <div class="search-users-and-new-user-btn" v-if="openSearchSwitch">
+                <label for="info-users">Qidiruv</label>
+                <div class="search-users-info-search">
+                    <input id="info-users" type="text" v-model="searchCustomers">
+                    <button @click="usersAdd = !usersAdd"><img src="../../assets/images/png/new-user-icon.png"></button>
+                </div>
+                <DropDown v-if="!usersAdd" :data="filteredCustomers" />
+            </div>
+            <DoubleInput title="Yangi mijoz" v-if="usersAdd">
+                <div class="section-input-wrapper"><input type="text" placeholder="Mijoz ismi"></div>
+                <div class="section-input-wrapper"><input type="text" placeholder="Telefon raqam"></div>
+            </DoubleInput>
         </div>
 
+        <DoubleInput title="Tolov" v-if="!usersAdd">
+            <div class="section-input-wrapper">
+                <input v-model.number="getTotlePriceCash" type="number" placeholder="Naqd">
+                <button @click="funcForCash()"><i class="fas fa-magnet"></i></button>
+            </div>
+            <div class="section-input-wrapper">
+                <input v-model.number="getTotlePriceCard" type="number" placeholder="Plastik">
+                <button @click="funcForCard()"><i class="fas fa-magnet"></i></button>
+            </div>
+        </DoubleInput>
+
         <template #footer-actions>
-            <button class="payment-footer-btn" @click="swicthFuncForConfirm()">To'lov</button>
+            <button class="payment-footer-btn" @click="confirmOrder" :disabled="loadingBtn">Tasdiqlash</button>
             <div class="footer-bottom-actions">
                 <button @click="openDiscountSection()"><i class="fas fa-tag"></i></button>
                 <button @click="openNasiyaSectionSwitch()"><i class="fas fa-calendar"></i></button>
@@ -91,90 +212,34 @@ onMounted(() => {
         </template>
     </SectionIndex>
 
-    <SectionIndex v-model="SectionIndexConfirmSwitch">
+    <SectionIndex v-model="sectionDiscountSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
         <template #back-btn>
-            <button @click="swicthFuncBackFromConfirm()">
-                <img src="../../assets/images/png/back-icon-orange.png" alt="">
-            </button>
+            <button @click="backFromDiscountFunc()"><img src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
-
-        <div class="users-info">
-            <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
-            <div class="search-users-info-search" v-if="openSearchSwitch">
-                <label for="info-users">Qidiruv</label>
-                <input id="info-users" type="text">
-            </div>
-
-            <div class="users-info-items regualr-products-wrapper" v-if="false">
-                <div class="user-info-item" v-for="item in 5" :key="item">
-                    <h2>Nurislombek</h2>
-                    <h2>90 785 2420</h2>
-                </div>
-            </div>
-        </div>
-
-        <div class="sections-payment">
-            <span>To'lov</span>
-            <div class="sections-payment-inputs">
-                <div class="sections-payment-input">
-                    <input type="text" placeholder="Naxt">
-                    <button><i class="fas fa-magnet"></i></button>
-                </div>
-
-                <div class="sections-payment-input">
-                    <input type="text" placeholder="Plastik">
-                    <button><i class="fas fa-magnet"></i></button>
-                </div>
-            </div>
-        </div>
-
-        <template #footer-actions>
-            <button class="payment-footer-btn">Tasdiqlash</button>
-            <div class="footer-bottom-actions">
-                <button @click="openDiscountSection()"><i class="fas fa-tag"></i></button>
-                <button @click="openNasiyaSectionSwitch()"><i class="fas fa-calendar"></i></button>
-            </div>
-        </template>
-    </SectionIndex>
-
-    <SectionIndex v-model="sectionDiscountSwitch">
-        <template #back-btn>
-            <button @click="backFromDiscountFunc()">
-                <img src="../../assets/images/png/back-icon-orange.png" alt="">
-            </button>
-        </template>
-
-        <div class="users-info">
-            <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
-            <div class="search-users-info-search" v-if="openSearchSwitch">
-                <label for="info-users">Qidiruv</label>
-                <input id="info-users" type="text">
-            </div>
-        </div>
 
         <div class="sections-payment">
             <span>Chegirma</span>
             <div class="sections-payment-inputs">
                 <div class="sections-payment-input">
-                    <input type="text" placeholder="Summada">
+                    <input type="number" v-model.number="userData.discount" @input="warningFunc" placeholder="Summada">
                     <button><span>so'm</span></button>
                 </div>
-
                 <div class="sections-payment-input">
-                    <input type="text" placeholder="Plastik">
+                    <input type="number"
+                        :value="displayTotal > 0 ? ((userData.discount / displayTotal) * 100).toFixed(0) : 0"
+                        @input="applyPercentDiscount($event)" placeholder="Foizda">
                     <button><span>%</span></button>
                 </div>
             </div>
-
             <div class="discount-cards">
-                <div class="discount-card" v-for="val in ['-5%', '-10%', '-15%', '-20%', '-25%', '-30%']" :key="val">
-                    <h2>{{ val }}</h2>
+                <div v-for="pct in [5, 10]" :key="pct" class="discount-card" @click="applyDiscountPercent(pct)">
+                    <h2>-{{ pct }}%</h2>
                 </div>
             </div>
         </div>
 
         <template #footer-actions>
-            <button class="payment-footer-btn">Tasdiqlash</button>
+            <button class="payment-footer-btn" @click="backFromDiscountFunc()">Tasdiqlash</button>
             <div class="footer-bottom-actions">
                 <button class="section-active"><i class="fas fa-tag"></i></button>
                 <button @click="openNasiyaSectionSwitch()"><i class="fas fa-calendar"></i></button>
@@ -182,46 +247,40 @@ onMounted(() => {
         </template>
     </SectionIndex>
 
-    <SectionIndex v-model="nasiyaSectionSwitch">
+    <SectionIndex v-model="nasiyaSectionSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
         <template #back-btn>
-            <button @click="backFromDiscountFunc()">
-                <img src="../../assets/images/png/back-icon-orange.png" alt="">
-            </button>
+            <button @click="backFromDiscountFunc()"><img src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
 
         <div class="users-info">
-            <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
-            <div class="search-users-info-search" v-if="openSearchSwitch">
-                <label for="info-users">Qidiruv</label>
-                <input id="info-users" type="text">
+            <button @click="openSearchSwitch = !openSearchSwitch, usersAdd = false">Mijozlar</button>
+            <div class="search-users-and-new-user-btn" v-if="openSearchSwitch">
+                <div class="search-users-info-search">
+                    <input type="text" v-model="searchCustomers" placeholder="Qidiruv...">
+                </div>
+                <DropDown v-if="!usersAdd" :data="filteredCustomers" />
             </div>
         </div>
 
         <div class="sections-payment">
-            <span>Nasiya</span>
+            <span>Nasiya summasi</span>
             <div class="sections-payment-inputs">
                 <div class="sections-payment-input">
-                    <input type="text" placeholder="Naxt">
-                    <button><i class="fas fa-magnet"></i></button>
-                </div>
-
-                <div class="sections-payment-input">
-                    <input type="text" placeholder="Plastik">
-                    <button><i class="fas fa-magnet"></i></button>
+                    <input type="number" v-model.number="nasiya" @input="handleNasiyaChange" placeholder="Summa">
+                    <button><i class="fas fa-calendar"></i></button>
                 </div>
             </div>
         </div>
 
-        <div class="nasiya">
-            <span>Nasiya: 60 000 so’m</span>
+        <div class="nasiya" v-if="showNasiyaDate">
+            <span>Qaytarish muddati</span>
             <div class="nasiya-input-wrapper">
-                <input type="date">
-                <button><i class="fas fa-calendar"></i></button>
+                <input type="date" v-model="userData.loan_repayment_date">
             </div>
         </div>
 
         <template #footer-actions>
-            <button class="payment-footer-btn">Tasdiqlash</button>
+            <button class="payment-footer-btn" @click="backFromDiscountFunc()">Tasdiqlash</button>
             <div class="footer-bottom-actions">
                 <button @click="openDiscountSection()"><i class="fas fa-tag"></i></button>
                 <button class="section-active"><i class="fas fa-calendar"></i></button>
@@ -230,7 +289,7 @@ onMounted(() => {
     </SectionIndex>
 
     <button class="open-section-btn" v-if="lastBtnBackToOpenSectionSwitch" @click="openFirstSection()">
-        <img src="../../assets/images/png/back-icon.png" alt="">
+        <img src="../../assets/images/png/back-icon.png">
     </button>
 </template>
 
@@ -241,14 +300,15 @@ onMounted(() => {
     justify-content: center;
     padding: 5px 0;
     font-weight: 600;
-    color: rgba(104, 103, 103, 0.596);
+    color: var(--dark-color);
+    opacity: 0.9;
     font-size: 32px;
 }
 
 .regualr-products-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 5px;
     overflow: auto;
     height: 400px;
     padding: 10px;
@@ -276,7 +336,6 @@ onMounted(() => {
 
 .open-section-btn {
     height: 75vh;
-    margin-top: 26px;
     padding: 0 15px;
     border-radius: 5px;
     background: var(--pr-color);
@@ -318,24 +377,41 @@ onMounted(() => {
         }
     }
 
-    .search-users-info-search {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+    .search-users-and-new-user-btn {
         margin-top: 20px;
+        position: relative;
 
         label {
             color: #c9c9c9;
         }
+    }
+
+    .search-users-info-search {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
 
         input {
-            background: var(--bg-color);
+            width: 100%;
+            background: transparent;
             border: 1px solid #c9c9c9;
             padding: 15px;
             outline: none;
             color: var(--dark-color);
             font-size: 20px;
             border-radius: 10px;
+        }
+
+        button {
+            width: fit-content;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            img {
+                width: 35px;
+            }
         }
     }
 }
@@ -352,6 +428,7 @@ onMounted(() => {
     background: var(--bg-color);
     padding: 15px;
     border-radius: 10px;
+    z-index: 10;
 
     .user-info-item {
         display: flex;
@@ -359,6 +436,17 @@ onMounted(() => {
         justify-content: space-between;
         border-radius: 10px;
         border: 1px solid #c9c9c9;
+        cursor: pointer;
+        transition: all .2s ease;
+
+        &:hover {
+            background: var(--pr-color);
+            color: white;
+
+            h2 {
+                color: white;
+            }
+        }
 
         h2 {
             font-size: 20px;
@@ -366,6 +454,15 @@ onMounted(() => {
             padding: 15px;
         }
     }
+}
+
+.selected-client {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--pr-color);
+    color: white;
+    border-radius: 10px;
+    text-align: center;
 }
 
 .sections-payment {
@@ -380,12 +477,46 @@ onMounted(() => {
         color: var(--pr-color);
     }
 
+    .order-summary {
+        width: 100%;
+        margin: 15px 0;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        background: var(--table-head-color);
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 18px;
+
+            &.total {
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 2px solid var(--pr-color);
+                font-weight: bold;
+                font-size: 22px;
+            }
+
+            span {
+                font-size: 18px;
+                color: #666;
+            }
+
+            strong {
+                font-size: 18px;
+                color: var(--dark-color);
+            }
+        }
+    }
+
     .sections-payment-inputs {
         width: 100%;
         display: flex;
         flex-direction: column;
         gap: 13px;
-        margin-top: 20px;
+        margin-top: 10px;
 
         .sections-payment-input {
             width: 100%;
@@ -398,11 +529,38 @@ onMounted(() => {
                 padding: 10px;
                 font-weight: 600;
                 font-size: 24px;
-                color: #c9c9c9;
+                color: var(--dark-color);
                 border: 1px solid #c9c9c9;
                 background: none;
                 outline: none;
                 border-radius: 10px;
+            }
+
+            .select-option-wrp {
+                display: flex;
+                gap: 5px;
+
+                select {
+                    padding: 10px;
+                    border: 1px solid #c9c9c9;
+                    background: none;
+                    border-radius: 10px;
+                    color: var(--dark-color);
+                    min-width: 200px;
+                }
+
+                button {
+                    padding: 10px 15px;
+                    background: none;
+                    border: 1px solid #c9c9c9;
+                    cursor: pointer;
+                    border-radius: 10px;
+
+                    i {
+                        font-size: 20px;
+                        color: var(--dark-color);
+                    }
+                }
             }
 
             button {
@@ -431,10 +589,24 @@ onMounted(() => {
     }
 }
 
+.balance-info {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #c9c9c9;
+    border-radius: 10px;
+    width: 100%;
+    text-align: center;
+
+    strong {
+        font-size: 24px;
+        color: var(--pr-color);
+    }
+}
+
 .discount-cards {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
     margin-top: 20px;
 
@@ -476,6 +648,7 @@ onMounted(() => {
     align-items: center;
     gap: 10px;
     margin-top: 20px;
+
     span {
         font-size: 25px;
         color: var(--pr-color);
@@ -494,7 +667,7 @@ onMounted(() => {
             border-radius: 10px;
             border: 1px solid #c9c9c9;
             background: transparent;
-            color: #c9c9c9;
+            color: var(--dark-color);
 
             &::-webkit-calendar-picker-indicator {
                 cursor: pointer;
@@ -514,5 +687,34 @@ onMounted(() => {
             }
         }
     }
+}
+
+.payment-footer-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.active-discount {
+    background: var(--pr-color) !important;
+    color: #fff !important;
+    border-color: var(--pr-color) !important;
+}
+
+.order-total {
+    margin: 10px 0;
+    padding: 10px;
+    background: #f0f0f0;
+    border-radius: 10px;
+    text-align: center;
+
+    strong {
+        font-size: 20px;
+        color: var(--dark-color);
+    }
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 </style>

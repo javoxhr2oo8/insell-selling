@@ -1,141 +1,151 @@
 <script setup>
-import { useUtil } from '~/server/util';
-import { useStore } from '~/store/store';
-import api from '~/server/api';
+import { ref, reactive, computed } from 'vue'
+import { useStore } from '~/store/store'
+import { useUtil } from '~/server/util'
+import { db } from '~/server/db'
+import { useKey } from '@/composables/useKey'
+import DeleteAlertModal from './AlertModal/DeleteAlertModal.vue';
 
-const { item } = defineProps(['item', 'index', 'total'])
-
-// const saleSwitch = ref(item?.Trades?.discount ? true : false)
-const saleSwitch = ref(false)
+const { item, index, total, trades, setTrades } = defineProps(['item', 'index', 'total', 'trades', 'setTrades'])
+const store = useStore()
+const { formatUZS } = useUtil()
 
 const editNameAndCategory = ref(false)
 
-const store = useStore()
-
-const { formatUZS, findError } = useUtil()
-
-const price = ref(item?.Trades?.price)
-const discount = ref(item?.Trades?.discount)
-
-const discountType = ref("sum");
-
-const discountValue = ref(item?.Trades?.discount || 0);
-
-const calculatedDiscount = computed(() => {
-    const basePrice = query.price * query.quantity;
-    if (discountType.value === 'percent') {
-        const percent = Math.min(Math.max(discountValue.value, 0), 100);
-        return (basePrice * percent) / 100;
-    }
-    return discountValue.value;
-});
+const query = reactive({
+    quantity: Math.max(item?.quantity || 1, 1),
+    price: item?.price || 0,
+    discount: item?.discount || 0
+})
 
 const addBtnDefault = ref(true)
 const remBtnDefault = ref(true)
 const addBtnLoading = ref(false)
 const rembtnLoading = ref(false)
 
-const query = reactive({
-    quantity: item?.Trades?.quantity,
-    price: price,
-    discount: discount
+const deleteModalSwicth = ref(false)
+
+const discountPrice = computed(() => (query.price * query.quantity) - query.discount)
+
+const allPrice = computed(() => {
+    const qty = Math.max(Number(query.quantity) || 1, 1)
+    const price = Number(query.price) || 0
+    return qty * price
 })
+
+
+function checkInputValue() {
+    const input = document.querySelector(`#quantity-input${index}`)
+    let rawValue = input.value
+    let value = Number(rawValue)
+
+    if (isNaN(value) || value < 1) {
+        value = 0
+    }
+
+    input.value = value
+    query.quantity = value
+}
+
+
+async function addQyt() {
+    const input = document.querySelector(`#quantity-input${index}`)
+    let val = Number(input.value) || 1
+
+    val += 1
+    input.value = val
+    query.quantity = val
+
+    await updateOfflineTrade()
+}
+
+async function remQyt() {
+    if (query.quantity <= 1) return
+    const input = document.querySelector(`#quantity-input${index}`)
+    let val = Number(input.value) || 1
+
+    val -= 1
+    input.value = val
+    query.quantity = val
+    await updateOfflineTrade()
+}
+
+const updateOfflineTrade = async () => {
+    if (!store.orderId) return
+    checkInputValue()
+    const data = await db.offlineTrades.get(store.orderId)
+    if (!data) return
+
+    const updatedTrades = data.trades.map(t =>
+        t.id === item.id
+            ? { ...t, quantity: query.quantity, price: query.price, discount: query.discount }
+            : t
+    )
+
+    await db.offlineTrades.put({
+        id: store.orderId,
+        trades: updatedTrades,
+        updatedAt: new Date().toISOString()
+    })
+
+    if (setTrades) setTrades(updatedTrades)
+}
+
+async function deleteOfflineTrade(tradeId) {
+    store.ordersLoading = true
+    if (!store.orderId) return
+    const data = await db.offlineTrades.get(store.orderId)
+    if (!data) return
+
+    const updatedTrades = data.trades.filter(t => t.id !== tradeId)
+    await db.offlineTrades.put({
+        id: store.orderId,
+        trades: updatedTrades,
+        updatedAt: new Date().toISOString()
+    })
+
+    if (setTrades) setTrades(updatedTrades)
+    store.ordersLoading = false
+    deleteModalSwicth.value = false
+}
+
+const calculateCurrency = (currency) => {
+    const usdToUzs = 12000
+    let getPrice
+    if (currency == '$') {
+        getPrice = allPrice.value * usdToUzs
+    } else {
+        getPrice = allPrice.value
+    }
+    return getPrice
+}
 
 const displayPrice = computed({
     get() {
-        return new Intl.NumberFormat('ru-RU').format(price.value || 0);
+        return new Intl.NumberFormat('ru-RU').format(query.price || 0)
     },
     set(val) {
-        const num = Number(val.replace(/\D/g, ''));
-        price.value = num;
+        const num = Number(val.replace(/\D/g, '')) || 0
+        query.price = num
+        updateOfflineTrade()
     }
-});
-
-const displayDiscount = computed({
-    get() {
-        return new Intl.NumberFormat('ru-RU').format(discountValue.value || 0);
-    },
-    set(val) {
-        const num = Number(val.replace(/\D/g, ''));
-        discountValue.value = num;
-    }
-});
+})
 
 
-const updateTrades = async (actionType = null) => {
-    if (actionType == 'add') {
-        addBtnDefault.value = false
-        addBtnLoading.value = true
-    } else if (actionType == 'rem') {
-        remBtnDefault.value = false
-        rembtnLoading.value = true
-    }
-
-    const orderId = item?.order_id || item?.Orders?.id || item?.Trades?.order_id;
-    const tradeId = item?.id || item?.Trades?.id;
-    store.loader = true
-    store.ordersLoading = true
-    const payload = {
-        id: tradeId,
-        order_id: orderId,
-        quantity: Number(query.quantity),
-        code: item?.Trades?.code || item?.code || "string",
-        price: query.price,
-        discount: calculatedDiscount.value
-    }
-
-    const res = await api.update_trade(payload).catch(err => {
-        findError('signIn', err.response?.status)
-    })
-    store.loader = false
-    store.ordersLoading = false
-
-    addBtnDefault.value = true;
-    remBtnDefault.value = true;
-    addBtnLoading.value = false;
-    rembtnLoading.value = false;
-}
-
-function discountPrice() {
-    return (query.price * query.quantity) - calculatedDiscount.value;
-}
-
-const deleteTrade = async (tradeId) => {
-    store.ordersLoading = true
-    store.loader = true
-    const res = await api.remove_trade(tradeId).catch(err => {
-        findError('signIn', err.response?.status)
-    })
-    store.ordersLoading = false
-    store.loader = false
-    console.log(res)
-}
-
-function addQyt(add) {
-    query.quantity += 1
-    updateTrades(add)
-}
-
-function remQyt(rem) {
-    if (query.quantity <= 1) return;
-    query.quantity -= 1
-    if (query.quantity >= 0) {
-        updateTrades(rem)
-    }
-}
-
-function allPrice() {
-    let price = item?.Trades?.price * query.quantity
-    return price
-}
-
-function changePrice() {
-    updateTrades()
-}
-
-function discountFunc() {
-    updateTrades()
-}
+useKey((eventData) => {
+  if (!deleteModalSwicth.value) return
+  
+  if (eventData.key === 'Enter') {
+    eventData.prevent()
+    deleteOfflineTrade(item.id)
+    deleteModalSwicth.value = false
+  }
+  
+  if (eventData.key === 'Escape') {
+    eventData.prevent()
+    deleteModalSwicth.value = false
+  }
+})
 </script>
 
 <template>
@@ -144,78 +154,80 @@ function discountFunc() {
             <td>{{ total - index }}</td>
 
             <td @click="editNameAndCategory = true">
-                {{ item?.Trades?.product?.product_type?.name2 }} - {{ item?.Trades?.product?.product_type?.name }}
+                {{ item?.Products?.category?.name }} - {{ item?.Products?.product_type?.name }}
             </td>
 
             <td>
                 <div class="qty-control">
-                    <button type="button" v-if="addBtnDefault" @click="remQyt('add')">−</button>
-                    <button type="button" v-if="addBtnLoading">
-                        <SpinerLoader :width="10" />
-                    </button>
-                    <input type="text" :value="query.quantity">
-                    <button type="button" v-if="remBtnDefault" @click="addQyt('rem')">+</button>
-                    <button type="button" v-if="rembtnLoading">
-                        <SpinerLoader :width="10" />
-                    </button>
+                    <button type="button" v-if="addBtnDefault" @click="remQyt">−</button>
+                    <button type="button" v-if="addBtnLoading">...</button>
+                    <input :id="`quantity-input${index}`" type="text" v-model.number="query.quantity"
+                        @input="updateOfflineTrade" min="1">
+                    <button type="button" v-if="remBtnDefault" @click="addQyt">+</button>
+                    <button type="button" v-if="rembtnLoading">...</button>
                 </div>
-                <span class="qty-txt">{{ item?.Trades?.product?.olchov_birligi }}</span>
+                <span class="qty-txt">{{ item?.Products?.olchov_birligi }}</span>
             </td>
 
             <td>
-                <form @submit.prevent="changePrice()">
-                    <input class="price-input" type="text" v-model="displayPrice"></input>
-                    <span class="qty-txt">{{ item?.Trades?.product?.currency?.currency }}</span>
-                </form>
+                <input class="price-input" type="text" v-model="displayPrice" inputmode="numeric">
+                <span class="qty-txt">{{ item?.Products?.currency?.currency }}</span>
             </td>
-
-            <!-- <td>
-                <form class="discount-form" @submit.prevent="discountFunc()">
-                    <div v-if="saleSwitch" class="discount-wrapper" style="display: flex; gap: 5px;">
-                        <input type="text" class="discount-input" placeholder="0" v-model="displayDiscount" />
-
-                        <select class="order-sale-price-select" v-model="discountType" @change="discountFunc()">
-                            <option value="sum">so'm</option>
-                            <option value="percent">%</option>
-                        </select>
-                    </div>
-
-                    <button type="button" @click="saleSwitch = !saleSwitch" class="open-sale-input-btn">
-                        <i class="fa-solid fa-angle-right" :class="{ 'fa-angle-left': saleSwitch }"></i>
-                    </button>
-                </form>
-            </td> -->
 
             <td>
                 <div class="prs">
-                    {{ formatUZS(discountPrice()) }} so'm
-                    <div class="discount-price-wrp" v-if="item?.Trades?.discount > 0">
-                        <span class="discount-price">{{ formatUZS(allPrice())
-                            }}</span>
+                    {{ formatUZS(calculateCurrency(item?.Products?.currency?.currency)) }} so'm
+                    <div class="discount-price-wrp" v-if="query.discount > 0">
+                        <span class="discount-price">{{ formatUZS(allPrice) }}</span>
                         <span>so'm</span>
                     </div>
                 </div>
             </td>
+
+
+            <button class="remove-trade-btn" @click="deleteModalSwicth = true">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </tr>
-        <button class="remove-trade-btn" @click="deleteTrade(item?.Trades?.id)"><i
-                class="fa-solid fa-xmark"></i></button>
+
+        <DeleteAlertModal v-model:isOpen="deleteModalSwicth">
+            <template #body>
+                <div class="delete-content">
+                    <span>Mahsulot {{ item?.Products?.product_type?.name }}</span>
+                    <p class="final-warning">
+                        Rostdan ham o'chirilsinmi?
+                    </p>
+                </div>
+            </template>
+
+            <template #footer>
+                <div class="custom-footer">
+                    <button class="btn-custom-cancel" @click="deleteModalSwicth = false">
+                        Yo’q, ortga qaytish
+                    </button>
+                    <button class="btn-custom-delete" @click="deleteOfflineTrade(item.id)">
+                        Ha, o’chirilsin
+                    </button>
+                </div>
+            </template>
+        </DeleteAlertModal>
+
+        <productsModal v-model="editNameAndCategory">
+            <header class="modal-header">
+                <h2>{{ item?.product?.name2 }} - {{ item?.product?.name }}</h2>
+                <button class="close-btn" @click="editNameAndCategory = false">&times;</button>
+            </header>
+
+            <div class="edit-body">
+                <div class="ed-inp">
+                    <label for="pr-name">Ombordagi soni</label>
+                    <input id="pr-name" :value="query.quantity" type="text" readonly>
+                </div>
+                <div class="ed-inp">
+                    <label for="pr-category">Izohi</label>
+                    <input :value="item?.code" type="text" id="pr-category" readonly>
+                </div>
+            </div>
+        </productsModal>
     </tbody>
-
-    <productsModal v-model="editNameAndCategory">
-        <header class="modal-header">
-            <h2>{{ item?.Trades?.product?.product_type?.name2 }} - {{ item?.Trades?.product?.product_type?.name }}</h2>
-            <button class="close-btn" @click="editNameAndCategory = false">&times;</button>
-        </header>
-
-        <div class="edit-body">
-            <div class="ed-inp">
-                <label for="pr-name">Ombordagi soni</label>
-                <input id="pr-name" :value="item?.Trades?.quantity" type="text" readonly>
-            </div>
-            <div class="ed-inp">
-                <label for="pr-category">Izohi</label>
-                <input :value="item?.Trades?.code" type="text" id="pr-category" readonly>
-            </div>
-        </div>
-    </productsModal>
 </template>

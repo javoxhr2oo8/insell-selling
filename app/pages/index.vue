@@ -41,6 +41,9 @@ onMounted(() => {
     width: 100%;
     display: flex;
     align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    background: var(--body-color);
 }
 
 .orders-component {

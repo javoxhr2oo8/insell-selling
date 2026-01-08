@@ -1,169 +1,123 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
-import { useStore } from '~/store/store';
-import { useUtil } from '~/server/util';
-import api from '~/server/api';
-import { db } from '~/server/db';
+import { ref, onMounted, watch } from 'vue'
+import { useStore } from '~/store/store'
+import { useUtil } from '~/server/util'
+import { db } from '~/server/db'
 
-const { formatUZS, findError } = useUtil()
+const { formatUZS, saveRegularProduct } = useUtil()
 const store = useStore()
 
-const getCategoriesData = ref({})
-const filteredProducts = ref({})
+const getCategoriesData = ref([])
 const products = ref([])
 const allProductsStore = ref([])
+const filteredProducts = ref([])
+
 const searchText = ref('')
 const searchSwitch = ref(true)
-
-let timeout;
+let timeout = null
 
 const getCategoriesOffline = async () => {
-    const getCategories = await db.categories.get('categories')
-    if (getCategories) {
-        getCategoriesData.value = getCategories.list
-    }
-}
-
-const getCategories = async () => {
-    const query = {
-        branch_id: store.branchId,
-        page: 0,
-        limit: 999999
-    }
-    const res = await api.get_categories(query)
-    if (res?.data) {
-        await db.categories.put({
-            id: 'categories',
-            list: res?.data,
-            updatedAt: new Date().toISOString()
-        })
-        await getCategoriesOffline()
-    }
+    const data = await db.categories.get('categories')
+    getCategoriesData.value = data?.list || []
 }
 
 const initProducts = async () => {
-    const localData = await db.products.get('all_products');
-    if (localData && localData.list) {
-        allProductsStore.value = localData.list;
-        products.value = localData.list;
-    } else {
-        await fetchProducts();
+    const data = await db.products.get('all_products')
+    if (data?.list) {
+        allProductsStore.value = data.list
+        products.value = data.list
     }
-};
-
-
-const fetchProducts = async () => {
-    store.loader = true
-    searchSwitch.value = false
-    try {
-        const res = await api.get_products({
-            all_product: true,
-            limit: 9999999,
-            page: 0
-        });
-
-        if (res?.data) {
-            await db.products.put({
-                id: 'all_products',
-                list: res.data,
-                updatedAt: new Date().toISOString()
-            });
-            allProductsStore.value = res.data;
-            products.value = res.data;
-        }
-    } catch (err) {
-        findError('signIn', err.response?.status);
-    } finally {
-        searchSwitch.value = true;
-        store.loader = false;
-    }
-}
-
-const getFilteredProducts = async (id) => {
-    const data = { category_id: id, branch_id: store.branchId, limit: 999999 }
-    const res = await api.get_filtered_products(data)
-    filteredProducts.value = res?.data
 }
 
 const handleSearch = () => {
-    clearTimeout(timeout);
+    clearTimeout(timeout)
 
-    timeout = setTimeout(async () => {
-        const query = searchText.value.toLowerCase().trim();
+    timeout = setTimeout(() => {
+        const query = searchText.value.toLowerCase().trim()
 
-        if (query.length === 0) {
-            products.value = [...allProductsStore.value];
-            return;
+        if (!query) {
+            products.value = [...allProductsStore.value]
+            return
         }
 
         const results = allProductsStore.value.filter(item => {
-            const prod = item?.Products;
-            if (!prod) return false;
+            const prod = item?.Products
+            if (!prod) return false
 
-            if (query.length === 13 && query.startsWith('29')) {
-                const plu = prod.plu?.toString() || "";
-                return plu.includes(query.slice(0, 7));
-            } else {
-                const name = prod.product_type?.name?.toLowerCase() || "";
-                const name2 = prod.product_type?.name2?.toLowerCase() || "";
-                const category = prod.category?.name?.toLowerCase() || "";
-                const code = prod.code?.toString() || "";
+            const name = prod.product_type?.name?.toLowerCase() || ''
+            const name2 = prod.product_type?.name2?.toLowerCase() || ''
+            const category = prod.category?.name?.toLowerCase() || ''
+            const code = prod.code?.toString() || ''
 
-                return name.includes(query) || name2.includes(query) ||
-                    code.includes(query) || category.includes(query);
-            }
-        });
+            return (
+                name.includes(query) ||
+                name2.includes(query) ||
+                category.includes(query) ||
+                code.includes(query)
+            )
+        })
 
-        products.value = results;
+        products.value = results
 
         if (results.length === 1) {
-            const foundProduct = results[0];
-            const code = foundProduct.Products?.code;
-            const price = foundProduct.Products?.price;
-
-            if (code) {
-                await toTrade(code, price);
-            }
+            const p = results[0]?.Products
+            if (p?.code) addTradeOffline(p)
         }
-    }, 150);
-};
-
-watch(searchText, () => {
-    handleSearch();
-});
-
-const toTrade = async (code, price) => {
-    store.ordersLoading = true
-    let data = {
-        order_id: store.orderId,
-        code: code,
-        quantity: 1,
-        price: price || 0,
-        discount: 0
-    }
-
-    try {
-        await api.to_tarde(data);
-        searchText.value = "";
-    } catch (err) {
-        findError('signIn', err.response?.status);
-    } finally {
-        store.ordersLoading = false;
-        searchSwitch.value = true;
-    }
+    }, 150)
 }
 
-const deleteOrder = async () => {
-    store.ordersLoading = true;
-    store.loader = true;
-    try {
-        await api.remove_order(store.orderId);
-    } catch (err) {
-        findError('signIn', err.response?.status)
-    } finally {
-        store.ordersLoading = false;
-        store.loader = false;
+watch(searchText, handleSearch)
+
+const addTradeOffline = async (product) => {
+    if (!store.orderId) return
+
+    store.updateTrade = true
+
+    let data = await db.offlineTrades.get(store.orderId)
+    if (!data) data = { id: store.orderId, trades: [] }
+
+    const trades = data.trades || []
+
+    const exists = trades.find(t => t.Products?.code === product.code)
+    let updatedTrades = []
+
+    const clonedProduct = JSON.parse(JSON.stringify(product))
+
+    if (exists) {
+        updatedTrades = trades.map(t =>
+            t.Products.code === product.code
+                ? { ...t, quantity: t.quantity + 1 }
+                : t
+        )
+        console.log("Added to quantity")
+    } else {
+        updatedTrades = [
+            ...trades,
+            {
+                id: crypto.randomUUID(),
+                Products: clonedProduct,
+                quantity: 1,
+                price: product.price,
+                discount: 0
+            }
+        ]
     }
+
+    await db.offlineTrades.put({
+        id: store.orderId,
+        trades: updatedTrades,
+        updatedAt: new Date().toISOString()
+    })
+
+    searchText.value = ''
+    store.ordersLoading = !store.ordersLoading
+    store.updateTrade = false
+}
+
+const getFilteredProductsOffline = (categoryId) => {
+    filteredProducts.value = allProductsStore.value.filter(
+        p => p?.Products?.category?.id === categoryId
+    )
 }
 
 function openProductsMenu() {
@@ -176,9 +130,14 @@ function closeProductsMenu() {
     store.productDetailShow = false
 }
 
+function closeBothModal() {
+    store.productDetailShow = false
+    store.productDetailShow = false
+}
+
 onMounted(async () => {
-    await initProducts();
-    await getCategories();
+    await initProducts()
+    await getCategoriesOffline()
 })
 </script>
 
@@ -187,28 +146,19 @@ onMounted(async () => {
         <div class="products">
             <div class="products-wrapper">
                 <div class="products-search">
-                    <input type="text" v-model="searchText" @input="handleSearch()" placeholder="Maxsulot izlash">
-                    <!-- <button><i class="fas fa-search"></i></button> -->
+                    <input id="trades-input" type="text" v-model="searchText" @input="handleSearch()"
+                        placeholder="Maxsulot izlash">
                     <button class="products-button" @click="store.modalProductsCategory = true">Maxsulotlar</button>
                 </div>
 
-
                 <div class="search-history" :class="{ 'activeHistory': searchText.length }" v-if="searchSwitch">
                     <ul>
-                        <li v-for="item in products" @click="toTrade(item?.Products?.code, item?.Products?.price)">
-                            {{ item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}
+                        <li v-for="item in products" :key="item.id">
+                            <i @click="saveRegularProduct(item)" class="fas fa-star"></i> <span @click="addTradeOffline(item?.Products)">{{
+                                item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}</span>
                         </li>
                     </ul>
                 </div>
-
-                <!-- <div class="all-price">
-                        <div class="all-price-left">
-                            <h3>Umumiy summa: </h3>
-                            <h2>{{ formatUZS(store.ordersBlance?.[0]?.balance) }} so'm</h2>
-                        </div>
-                        <button @click="deleteOrder()"><i class="fa-solid fa-xmark"></i></button>
-                    </div> -->
-
             </div>
 
             <ProductsModal v-model="store.modalProductsCategory">
@@ -219,7 +169,8 @@ onMounted(async () => {
                     </header>
                     <div class="modal-prodcuts">
                         <product v-for="item in getCategoriesData"
-                            @click="openProductsMenu(), getFilteredProducts(item.id)" :key="item" :item="item" />
+                            @click="openProductsMenu(), getFilteredProductsOffline(item.id)" :key="item.id"
+                            :item="item" />
                     </div>
                 </div>
             </ProductsModal>
@@ -227,57 +178,16 @@ onMounted(async () => {
             <ProductsModal v-model="store.productDetailShow">
                 <div class="modal">
                     <header class="modal-header">
-                        <h3>Mahsuloti</h3>
+                        <h3>Mahsulot</h3>
                         <button class="close-btn" @click="closeProductsMenu()">&times;</button>
                     </header>
-
-                    <div class="products-search">
-                        <input type="text" placeholder="Mahsulot izlash">
-                        <button><i class="fas fa-search"></i></button>
-                    </div>
-
                     <div class="products-filtered-by-category">
-                        <div class="product-card" v-for="(product, i) in filteredProducts" :key="product.id">
-                            <div class="card-header">
-                                <span class="product-number">№{{ i + 1 }}</span>
-                                <span class="product-code">Kodi: {{ product?.Products?.code }}</span>
-                            </div>
-
-                            <div class="card-content">
-                                <div class="info-row">
-                                    <span class="label">Kategoriya:</span>
-                                    <span class="value">{{ product?.Products?.category?.name }}</span>
-                                </div>
-
-                                <div class="info-row">
-                                    <span class="label">Artikul:</span>
-                                    <span class="value">{{ product?.Products?.product_type?.name }}</span>
-                                </div>
-
-                                <div class="info-row">
-                                    <span class="label">Marka:</span>
-                                    <span class="value">{{ product?.Products?.product_type?.name2 }}</span>
-                                </div>
-
-                                <div class="info-row highlight">
-                                    <span class="label">Qoldiq:</span>
-                                    <span class="value">{{ formatUZS(product?.Products?.quantity) }} dona</span>
-                                </div>
-
-                                <div class="info-row highlight">
-                                    <span class="label">Narx:</span>
-                                    <span class="value price">{{ formatUZS(product?.Products?.price) }} so'm</span>
-                                </div>
-                            </div>
-
-                            <button class="add-btn">
-                                <svg class="btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                    <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5"
-                                        stroke-linecap="round" />
-                                </svg>
+                        <card v-for="(product, i) in filteredProducts" :key="product.id" :product="product">
+                            <button class="add-btn" @click="addTradeOffline(product?.Products), closeBothModal()">
                                 Qo'shish
+                                <i class="fas fa-plus"></i>
                             </button>
-                        </div>
+                        </card>
                     </div>
                 </div>
             </ProductsModal>

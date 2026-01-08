@@ -14,11 +14,14 @@ html {
 body {
     height: 100%;
     font-family: "Roboto", sans-serif;
-    background: var(--bg-color);
+    background: var(--body-color);
     transition: 0.5s ease;
-
+    // background-image: url('../images/jpg/bg-img.jpg');
+    background-repeat: no-repeat;
+    background-size: cover;
     &.dark {
         --bg-color: #1f1e1e;
+        --body-color: #1f1e1e;
         --dark-color: #ffff;
         --table-head-color: #333232;
         --table-color: #f9fafb;
@@ -28,7 +31,8 @@ body {
     }
 
     &.light {
-        --bg-color: #ffff;
+        --bg-color: #fff;
+        --body-color: linear-gradient(145deg, #ffe8c8, #fcd39a);
         --dark-color: #111827;
         --table-head-color: #f9fafb;
         --table-color: #111827;
@@ -45,4 +49,8 @@ body {
 
 .Vue-Toastification__toast--success {
     background: var(--pr-color) !important;
+}
+
+input:focus {
+    border: 1px solid var(--pr-color) !important;
 }

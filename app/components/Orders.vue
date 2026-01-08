@@ -1,36 +1,57 @@
 <script setup>
-import api from '~/server/api';
-import { useStore } from '~/store/store';
-import { useUtil } from '~/server/util';
+import { useStore } from '~/store/store'
+import { db } from '~/server/db'
+import { ref, onMounted, watch } from 'vue'
 
-const store = useStore();
+const store = useStore()
 
-const { findError } = useUtil()
+const getTrades = ref([])
 
-const getTrades = ref({})
+const tradesGetOffline = async () => {
+    if (!store.orderId) {
+        getTrades.value = []
+        store.totalPriceOffline = 0
+        store.ordersBlance = 0
+        return
+    }
 
-const tradesGet = async () => {
     store.loader = true
-    const res = await api.get_trades(store.orderId, store.branchId).catch(err => {
-        findError('signIn', err.response?.status)
-    })
-    store.ordersBlance = res?.order_balances
-    getTrades.value = res?.trades
-    store.loader = false
-    console.log(res)
+
+    try {
+        const data = await db.offlineTrades.get(store.orderId)
+
+        if (!data) {
+            getTrades.value = []
+            store.totalPriceOffline = 0
+            store.loader = false
+            return
+        }
+
+        const trades = data?.trades || []
+
+        const total = trades.reduce((sum, trade) => sum + (trade.price * (trade.quantity || 1)), 0);
+        store.totalPriceOffline = total
+        getTrades.value = trades
+        store.tradesId = data.id
+
+        store.ordersBlance = trades.reduce((sum, item) => {
+            const price = item.price * item.quantity
+            const discount = item.discount || 0
+            return sum + (price - discount)
+        }, 0)
+
+    } catch (e) {
+        console.error("Ошибочка в tradesGetOffline:", e)
+    } finally {
+        store.loader = false
+    }
 }
 
-onMounted(() => {
-    tradesGet()
-})
+onMounted(tradesGetOffline)
 
-watch(() => store.ordersLoading, () => {
-    tradesGet()
-})
+watch(() => store.orderId, tradesGetOffline)
 
-watchEffect(() => {
-    tradesGet()
-})
+watch(() => store.ordersLoading, tradesGetOffline)
 </script>
 
 <template>
@@ -39,6 +60,7 @@ watchEffect(() => {
             <div class="container">
                 <div class="orders-wrapper">
                     <ProductsSearch />
+
                     <div class="table-wrapper">
                         <table class="product-table">
                             <thead>
@@ -47,12 +69,11 @@ watchEffect(() => {
                                     <th>Mahsulot</th>
                                     <th>Hajm</th>
                                     <th>Narx</th>
-                                    <!-- <th>Chegirma</th> -->
                                     <th>To'lov</th>
                                 </tr>
                             </thead>
 
-                            <Order v-for="(item, i) in getTrades" :key="item" :item="item" :index="i"
+                            <Order v-for="(item, i) in getTrades" :key="item.id" :item="item" :index="i"
                                 :total="getTrades.length" />
 
                         </table>

@@ -4,6 +4,9 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        background: var(--product-table-color);
+        padding: 20px;
+        border-radius: 15px;
         .add-order-btn {
             padding: 12px 20px;
             background: var(--pr-color);
@@ -37,16 +40,19 @@
                 display: none;
             }
             button {
-                width: 150px;
-                padding: 10px 20px;
+                padding: 12px 45px;
                 font-weight: 600;
-                font-size: 30px;
+                font-size: 25px;
                 cursor: pointer;
                 background: none;
                 border: 2px solid var(--pr-color);
                 color: var(--pr-color);
                 border-radius: 10px;
                 transition: all 0.2s ease;
+                span {
+                    width: 150px;
+                    display: flex;
+                }
                 &:hover {
                     color: #fff;
                     background: var(--pr-color);
