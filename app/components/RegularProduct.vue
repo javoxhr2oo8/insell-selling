@@ -153,7 +153,7 @@ const addTradeOffline = async (product) => {
         @dragstart="startDrag" @dragover.prevent="handleDragOver" @drop="handleDrop" @dragleave="handleDragLeave"
         @dragend="handleDragEnd">
         <div class="regular-product-overlay" @click="addTradeOffline(product?.Products)"></div>
-        <button class="drag-btn"><i class="fas fa-bars"></i></button>
+        <button class="drag-btn"><i class="fas fa-equals"></i></button>
         <h2>
             {{ product?.Products?.product_type?.name }} - {{ product?.Products?.category?.name }}
         </h2>

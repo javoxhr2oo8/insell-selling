@@ -59,10 +59,28 @@ const getUsers = async () => {
     }
 }
 
+const getKassa = async ()=> {
+    const data = {
+        branch_id: store.branchId
+    }
+
+    const res = await api.get_kassa(data)
+
+    console.log(res)
+
+    if(res) {
+        db.get_kassa.put({
+            id: 'get_kassa',
+            list: res
+        })
+    }
+}
+
 onMounted(() => {
     getAllProducts()
     getCategories()
     getUsers()
+    getKassa()
 })
 </script>
 

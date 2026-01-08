@@ -9,7 +9,8 @@ db.version(1).stores({
   createOrderOffline: 'id',
   get_all_products: 'id',
   regular_products: 'id',
-  get_customers: 'id'
+  get_customers: 'id',
+  get_kassa: 'id'
 });
 
 db.version(2).stores({
