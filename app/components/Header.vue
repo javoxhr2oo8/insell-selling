@@ -2,7 +2,11 @@
 import { reloadPage } from '@/composables/reload';
 import { useKey } from '@/composables/useKey';
 import keyboardEventInfo from './elements/keyboardEventInfo.vue';
+import DeleteAlertModal from './AlertModal/DeleteAlertModal.vue';
+import { useUtil } from '~/server/util';
 const { theme, toggleTheme } = useTheme()
+
+const { routerState } = useUtil()
 
 useKey((eventData) => {
     if (eventData.ctrl && eventData.key === 'm') {
@@ -10,6 +14,18 @@ useKey((eventData) => {
         eventData.prevent()
     }
 })
+
+const logoutModal = ref(false)
+
+function logOut() {
+    routerState('signIn')
+
+    document.cookie = "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+    localStorage.clear();
+
+    window.location.href = "/signIn";
+}
 </script>
 
 <template>
@@ -18,7 +34,8 @@ useKey((eventData) => {
             <div class="container">
                 <div class="header-wrapper">
                     <div class="header-back-btn-and-title">
-                        <button><img src="../assets/images/png/back-icon.png" alt=""></button>
+                        <!-- <button><img src="../assets/images/png/back-icon.png" alt=""></button> -->
+                        <button @click="logoutModal = true"><i class="fas fa-sign-out-alt"></i></button>
                         <h2 class="main-title">Savdo bo'limi</h2>
                     </div>
 
@@ -52,6 +69,28 @@ useKey((eventData) => {
                 </div>
             </div>
         </div>
+
+
+        <DeleteAlertModal v-model:isOpen="logoutModal">
+            <template #body>
+                <div class="delete-content">
+                    <p class="final-warning">
+                        Siz rostan ham tizimdan chiqmoqchimisiz?
+                    </p>
+                </div>
+            </template>
+
+            <template #footer>
+                <div class="custom-footer">
+                    <button class="btn-custom-cancel" @click="logoutModal = false">
+                        Yo’q, ortga qaytish
+                    </button>
+                    <button class="btn-custom-delete" @click="logOut()">
+                        Ha, chiqmoqchiman
+                    </button>
+                </div>
+            </template>
+        </DeleteAlertModal>
     </div>
 </template>
 

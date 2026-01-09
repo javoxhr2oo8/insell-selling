@@ -3,85 +3,126 @@ import { db } from '~/server/db';
 import api from '~/server/api';
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
-import SendingIndicator from '~/components/SendingIndicator.vue';
+import { ref, onMounted } from 'vue';
 
 const { findError } = useUtil()
-
-const isSending = ref(false)
-
 const store = useStore()
+const isLoading = ref(false)
 
-const getAllProducts = async () => {
-    const data = {
-        branch_id: store.branchId,
-        all_products: true,
-        limit: 99999999
-    }
-    const res = await api.get_products(data).catch((err) => {
-        findError('signIn', err.status)
-    })
+const tokenCookie = useCookie('access_token');
 
-    if (res) {
-        db.products.put({
-            id: 'all_products',
-            list: res?.data
-        })
+const refreshToken = async () => {
+    try {
+        const res = await api.refresh_token(tokenCookie.value);
+        if (res?.access_token) {
+            tokenCookie.value = res.access_token;
+            return true;
+        }
+    } catch (error) {
+        console.log('Refresh error:', error);
     }
+    return false;
 }
 
-const getCategories = async () => {
-    const data = {
-        branch_id: store.branchId,
-        limit: 99999999
-    }
-    const res = await api.get_categories(data)
+const loadAllData = async () => {
+    if (isLoading.value) return
 
-    if (res) {
-        db.categories.put({
-            id: 'categories',
-            list: res?.data
-        })
-    }
-}
+    isLoading.value = true
+    store.updateLocalBase = true
 
-const getUsers = async () => {
-    const data = {
-        branch_id: store.branchId,
-        limit: 99999999
-    }
-    const res = await api.get_customers(data)
+    const requests = [
+        {
+            name: 'products',
+            apiCall: () => api.get_products({
+                branch_id: store.branchId,
+                all_products: true,
+                limit: 99999999
+            }),
+            dbTable: 'products',
+            dbId: 'all_products'
+        },
+        {
+            name: 'categories',
+            apiCall: () => api.get_categories({
+                branch_id: store.branchId,
+                limit: 99999999
+            }),
+            dbTable: 'categories',
+            dbId: 'categories'
+        },
+        {
+            name: 'customers',
+            apiCall: () => api.get_customers({
+                branch_id: store.branchId,
+                limit: 99999999
+            }),
+            dbTable: 'get_customers',
+            dbId: 'get_customers'
+        },
+        {
+            name: 'kassa',
+            apiCall: () => api.get_kassa({ branch_id: store.branchId }),
+            dbTable: 'get_kassa',
+            dbId: 'get_kassa'
+        },
+        {
+            name: 'services',
+            apiCall: () => api.get_services({
+                branch_id: store.branchId,
+                page: 0,
+                limit: 25,
+            }),
+            dbTable: 'get_services',
+            dbId: 'get_services'
+        }
+    ]
 
-    if (res) {
-        db.get_customers.put({
-            id: 'get_customers',
-            list: res?.data
-        })
-    }
-}
+    try {
+        const results = await Promise.allSettled(
+            requests.map(async (req) => {
+                try {
+                    console.log(`📥 Загружаем ${req.name}...`)
 
-const getKassa = async ()=> {
-    const data = {
-        branch_id: store.branchId
-    }
+                    const res = await req.apiCall()
 
-    const res = await api.get_kassa(data)
+                    if (res?.data || res) {
+                        await db[req.dbTable].put({
+                            id: req.dbId,
+                            list: res.data || res
+                        })
+                        console.log(`✅ ${req.name} сохранен`)
+                        return { name: req.name, success: true }
+                    }
+                } catch (error) {
+                    console.error(`❌ Ошибка загрузки ${req.name}:`, error)
+                    if (error.status == 401) {
+                        await refreshToken()
+                    }
+                    return { name: req.name, success: false, error }
+                }
+            })
+        )
 
-    console.log(res)
+        const successful = results.filter(r => r.value?.success)
+        const failed = results.filter(r => !r.value?.success)
 
-    if(res) {
-        db.get_kassa.put({
-            id: 'get_kassa',
-            list: res
-        })
+        console.log(`🎯 Завершено: ${successful.length} успешно, ${failed.length} с ошибками`)
+
+    } catch (error) {
+        console.error('❌ Общая ошибка загрузки:', error)
+    } finally {
+        isLoading.value = false
+        store.updateLocalBase = false
     }
 }
 
 onMounted(() => {
-    getAllProducts()
-    getCategories()
-    getUsers()
-    getKassa()
+    loadAllData()
 })
+
+const refreshData = async () => {
+    await loadAllData()
+}
 </script>
 
 <template>

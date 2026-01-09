@@ -32,14 +32,14 @@ const initProducts = async () => {
 const handleSearch = () => {
     clearTimeout(timeout)
 
+    const query = searchText.value.toLowerCase().trim()
+
+    if (query.length < 3) {
+        products.value = []
+        return
+    }
+
     timeout = setTimeout(() => {
-        const query = searchText.value.toLowerCase().trim()
-
-        if (!query) {
-            products.value = [...allProductsStore.value]
-            return
-        }
-
         const results = allProductsStore.value.filter(item => {
             const prod = item?.Products
             if (!prod) return false
@@ -63,7 +63,7 @@ const handleSearch = () => {
             const p = results[0]?.Products
             if (p?.code) addTradeOffline(p)
         }
-    }, 150)
+    }, 300)
 }
 
 watch(searchText, handleSearch)
@@ -73,45 +73,57 @@ const addTradeOffline = async (product) => {
 
     store.updateTrade = true
 
-    let data = await db.offlineTrades.get(store.orderId)
-    if (!data) data = { id: store.orderId, trades: [] }
+    try {
+        let data = await db.offlineTrades.get(store.orderId)
+        if (!data) data = { id: store.orderId, trades: [] }
 
-    const trades = data.trades || []
+        const trades = data.trades || []
+        const productCode = product?.code
 
-    const exists = trades.find(t => t.Products?.code === product.code)
-    let updatedTrades = []
+        const existsIndex = trades.findIndex(t => t.Products?.code === productCode)
+        let updatedTrades = []
 
-    const clonedProduct = JSON.parse(JSON.stringify(product))
+        const clonedProduct = JSON.parse(JSON.stringify(product))
+        const now = new Date().toISOString()
 
-    if (exists) {
-        updatedTrades = trades.map(t =>
-            t.Products.code === product.code
-                ? { ...t, quantity: t.quantity + 1 }
-                : t
-        )
-        console.log("Added to quantity")
-    } else {
-        updatedTrades = [
-            ...trades,
-            {
+        if (existsIndex !== -1) {
+            updatedTrades = trades.map((t, index) =>
+                index === existsIndex
+                    ? {
+                        ...t,
+                        quantity: t.quantity + 1,
+                        updatedAt: now
+                    }
+                    : t
+            )
+        } else {
+            const newTrade = {
                 id: crypto.randomUUID(),
                 Products: clonedProduct,
                 quantity: 1,
                 price: product.price,
-                discount: 0
+                discount: 0,
+                createdAt: now,
+                updatedAt: now
             }
-        ]
+
+            updatedTrades = [newTrade, ...trades]
+        }
+
+        await db.offlineTrades.put({
+            id: store.orderId,
+            trades: updatedTrades,
+            updatedAt: now
+        })
+
+        searchText.value = ''
+        store.ordersLoading = !store.ordersLoading
+
+    } catch (error) {
+        console.error('Ошибка при добавлении товара:', error)
+    } finally {
+        store.updateTrade = false
     }
-
-    await db.offlineTrades.put({
-        id: store.orderId,
-        trades: updatedTrades,
-        updatedAt: new Date().toISOString()
-    })
-
-    searchText.value = ''
-    store.ordersLoading = !store.ordersLoading
-    store.updateTrade = false
 }
 
 const getFilteredProductsOffline = (categoryId) => {
@@ -131,13 +143,18 @@ function closeProductsMenu() {
 }
 
 function closeBothModal() {
-    store.productDetailShow = false
+    store.modalProductsCategory = false
     store.productDetailShow = false
 }
 
 onMounted(async () => {
     await initProducts()
     await getCategoriesOffline()
+})
+
+watch(() => store.updateLocalBase, () => {
+    initProducts()
+    getCategoriesOffline()
 })
 </script>
 
@@ -146,16 +163,16 @@ onMounted(async () => {
         <div class="products">
             <div class="products-wrapper">
                 <div class="products-search">
-                    <input id="trades-input" type="text" v-model="searchText" @input="handleSearch()"
-                        placeholder="Maxsulot izlash">
+                    <input id="trades-input" type="text" v-model="searchText" placeholder="Maxsulot izlash">
                     <button class="products-button" @click="store.modalProductsCategory = true">Maxsulotlar</button>
                 </div>
 
                 <div class="search-history" :class="{ 'activeHistory': searchText.length }" v-if="searchSwitch">
                     <ul>
                         <li v-for="item in products" :key="item.id">
-                            <i @click="saveRegularProduct(item)" class="fas fa-star"></i> <span @click="addTradeOffline(item?.Products)">{{
-                                item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}</span>
+                            <i @click="saveRegularProduct(item)" class="fas fa-star"></i> <span
+                                @click="addTradeOffline(item?.Products)">{{
+                                    item?.Products?.product_type?.name2 }} - {{ item?.Products?.product_type?.name }}</span>
                         </li>
                     </ul>
                 </div>
@@ -170,7 +187,7 @@ onMounted(async () => {
                     <div class="modal-prodcuts">
                         <product v-for="item in getCategoriesData"
                             @click="openProductsMenu(), getFilteredProductsOffline(item.id)" :key="item.id"
-                            :item="item"/>
+                            :item="item" />
                     </div>
                 </div>
             </ProductsModal>

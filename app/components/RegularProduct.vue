@@ -107,44 +107,55 @@ const addTradeOffline = async (product) => {
 
     store.updateTrade = true
 
-    let data = await db.offlineTrades.get(store.orderId)
-    if (!data) data = { id: store.orderId, trades: [] }
+    try {
+        let data = await db.offlineTrades.get(store.orderId)
+        if (!data) data = { id: store.orderId, trades: [] }
 
-    const trades = data.trades || []
+        const trades = data.trades || []
+        const productCode = product?.code
 
-    const exists = trades.find(t => t.Products?.code === product.code)
-    let updatedTrades = []
+        const existsIndex = trades.findIndex(t => t.Products?.code === productCode)
+        let updatedTrades = []
 
-    const clonedProduct = JSON.parse(JSON.stringify(product))
+        const clonedProduct = JSON.parse(JSON.stringify(product))
+        const now = new Date().toISOString()
 
-    if (exists) {
-        updatedTrades = trades.map(t =>
-            t.Products.code === product.code
-                ? { ...t, quantity: t.quantity + 1 }
-                : t
-        )
-        console.log("Added to quantity")
-    } else {
-        updatedTrades = [
-            ...trades,
-            {
+        if (existsIndex !== -1) {
+            updatedTrades = trades.map((t, index) =>
+                index === existsIndex
+                    ? {
+                        ...t,
+                        quantity: t.quantity + 1,
+                        updatedAt: now
+                    }
+                    : t
+            )
+        } else {
+            const newTrade = {
                 id: crypto.randomUUID(),
                 Products: clonedProduct,
                 quantity: 1,
                 price: product.price,
-                discount: 0
+                discount: 0,
+                createdAt: now,
+                updatedAt: now
             }
-        ]
+
+            updatedTrades = [newTrade, ...trades]
+        }
+
+        await db.offlineTrades.put({
+            id: store.orderId,
+            trades: updatedTrades,
+            updatedAt: now
+        })
+
+        store.ordersLoading = !store.ordersLoading
+
+    } catch (error) {
+    } finally {
+        store.updateTrade = false
     }
-
-    await db.offlineTrades.put({
-        id: store.orderId,
-        trades: updatedTrades,
-        updatedAt: new Date().toISOString()
-    })
-
-    store.ordersLoading = !store.ordersLoading
-    store.updateTrade = false
 }
 </script>
 

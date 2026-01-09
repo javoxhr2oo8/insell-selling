@@ -10,7 +10,9 @@ db.version(1).stores({
   get_all_products: 'id',
   regular_products: 'id',
   get_customers: 'id',
-  get_kassa: 'id'
+  get_kassa: 'id',
+  get_services: 'id',
+  orders_confirm: 'id'
 });
 
 db.version(2).stores({

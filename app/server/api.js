@@ -10,7 +10,7 @@ export default {
         return server('token', 'post', formData);
     },
 
-    refreshToken: (token) => server(`refresh_token?token=${token}`, 'post'),
+    refresh_token: (token) => server(`refresh_token?token=${token}`, 'post'),
 
     create_admin: (data) => server('create_admin', 'post', {
         name: data.name,
@@ -52,5 +52,9 @@ export default {
 
     get_categories: (query) => server('get_categories', 'get', query),
 
-    get_filtered_products: (query)=> server('get_products', 'get', query)
+    get_filtered_products: (query)=> server('get_products', 'get', query),
+
+    get_services: (query) => server('get_services', 'get', query),
+
+    order_confirmation_for_offline: (data) => server('order_confirmation_for_offline', 'put', data)
 };

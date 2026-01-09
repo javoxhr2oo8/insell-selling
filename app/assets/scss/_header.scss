@@ -163,7 +163,6 @@
         justify-content: center;
         cursor: pointer;
         transition: all 0.2s ease;
-
         &:hover {
             opacity: 0.8;
         }
@@ -174,6 +173,12 @@
 
         img {
             width: 20px;
+        }
+
+        i {
+            font-size: 25px;
+            rotate: 180deg;
+            color: #fff;
         }
     }
 }

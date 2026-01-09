@@ -104,11 +104,11 @@ $border-color: var(--table-head-color, #333232);
     background-color: $input-bg;
     border: 1px solid $border-color;
     border-radius: 12px;
-    transition: all 0.3s ease;
 
     &:focus-within {
         border-color: $pr-color;
         box-shadow: 0 0 0 1px $pr-color;
+        border-radius: 6px;
     }
 
     .prefix {
@@ -125,7 +125,12 @@ $border-color: var(--table-head-color, #333232);
         color: $dark-text;
         outline: none;
         font-size: 1rem;
-
+        &:last-child {
+            margin-left: 15px;
+        }
+        &:first-child {
+            margin-right: 15px;
+        }
         &::placeholder {
             color: #555;
         }

@@ -4,7 +4,7 @@ import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
 import { ToastSuccess, ToastError } from '#imports';
 
-const { formatPhone, routerState } = useUtil()
+const { formatPhone, routerState, focusInput } = useUtil()
 
 const store = useStore()
 
@@ -63,6 +63,10 @@ const onPhoneInput = (event) => {
     data.username = formatPhone(input.value);
     input.value = data.username;
 };
+
+onMounted(()=> {
+    focusInput('login-phone')
+})
 </script>
 
 <template>
@@ -82,7 +86,7 @@ const onPhoneInput = (event) => {
                             <label class="form-label">Login</label>
                             <div class="custom-input-group">
                                 <span class="prefix">+998</span>
-                                <input type="tel" @input="onPhoneInput" v-model="data.username"
+                                <input id="login-phone" type="tel" @input="onPhoneInput" v-model="data.username"
                                     class="form-control-custom" placeholder="Raqam kiriting" required
                                     autocomplete="off" />
                             </div>

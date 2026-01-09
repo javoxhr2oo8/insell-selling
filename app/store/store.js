@@ -25,6 +25,7 @@ export const useStore = defineStore('myStore', () => {
     const offlineOrdersList = []
     const updateTrade = ref(false)
     const updateRegularProducts = ref(false)
+    const updateLocalBase = ref(false)
     return { 
         modalProducts,
         productDetailShow,
@@ -48,6 +49,7 @@ export const useStore = defineStore('myStore', () => {
         totalPriceOffline,
         offlineOrdersList,
         updateTrade,
-        updateRegularProducts
+        updateRegularProducts,
+        updateLocalBase
      }
 })

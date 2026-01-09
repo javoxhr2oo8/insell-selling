@@ -6,6 +6,8 @@ import { useUtil } from '~/server/util';
 import { ToastError } from '@/composables/toast';
 import DropDown from '../elements/dropDown.vue';
 import DoubleInput from '../elements/doubleInput.vue';
+import api from '~/server/api';
+
 
 const store = useStore();
 const { formatUZS, getSortedRegularProducts } = useUtil();
@@ -18,6 +20,55 @@ const openSearchSwitch = ref(false);
 const usersAdd = ref(false);
 const defaultBtn = ref(true);
 const loadingBtn = ref(false);
+
+async function deleteOrderFromList(orderIdToDelete) {
+    if (!orderIdToDelete) return;
+
+    try {
+        const data = await db.createOrderOffline.get('createOrderOffline');
+        if (!data || !data.list) return;
+
+        const currentIndex = data.list.findIndex(o => String(o.id) === String(orderIdToDelete));
+
+        let nextOrder = null;
+        if (data.list.length > 1) {
+            if (currentIndex < data.list.length - 1) {
+                nextOrder = data.list[currentIndex + 1];
+            }
+            else {
+                nextOrder = data.list[currentIndex - 1];
+            }
+        }
+
+        const updatedList = data.list.filter(order => String(order.id) !== String(orderIdToDelete));
+        await db.createOrderOffline.update('createOrderOffline', {
+            list: updatedList,
+            updatedAt: new Date().toISOString()
+        });
+        await db.offlineTrades.delete(orderIdToDelete).catch(() => { });
+
+        if (String(store.orderId) === String(orderIdToDelete)) {
+            if (nextOrder) {
+                store.orderId = nextOrder.id;
+                focusInput('trades-input')
+                store.ordinalNumber = nextOrder.ordinal_number;
+            } else {
+                emit('update:modelValue', false);
+                store.orderId = null;
+                store.ordinalNumber = null;
+            }
+        }
+
+        isModalOpen.value = false;
+        ToastSuccess("Buyurtma o'chirildi");
+
+        store.updateOrders = true;
+        setTimeout(() => { store.updateOrders = false }, 100);
+
+    } catch (error) {
+        console.error("Xatolik:", error);
+    }
+}
 
 const userData = reactive({
     customer_name: '',
@@ -34,19 +85,23 @@ const getTotlePriceCash = ref(0);
 const getTotlePriceCard = ref(0);
 
 const hasOrder = computed(() => {
-    return store.isOfflineOrder ? (store.totalPriceOffline || 0) > 0 : (store.ordersBlance?.[0]?.balance || 0) > 0;
+    return store.offlineOrdersList ? (store.totalPriceOffline || 0) > 0 : (store.ordersBlance?.[0]?.balance || 0) > 0;
 });
 
 const displayTotal = computed(() => {
-    return store.isOfflineOrder ? (store.totalPriceOffline || 0) : (store.ordersBlance?.[0]?.balance || 0);
+    return store.offlineOrdersList ? (store.totalPriceOffline || 0) : (store.ordersBlance?.[0]?.balance || 0);
 });
 
-const amountAfterDiscount = computed(() => {
-    return Math.max(0, displayTotal.value - userData.discount);
+const minusPrice = computed(() => {
+    return (userData.discount || 0) + (nasiya.value || 0);
 });
 
 const finalPayable = computed(() => {
-    return Math.max(0, amountAfterDiscount.value - nasiya.value);
+    return displayTotal.value;
+});
+
+const amountAfterAll = computed(() => {
+    return Math.max(0, displayTotal.value - minusPrice.value);
 });
 
 function applyDiscountPercent(percent) {
@@ -68,20 +123,20 @@ function warningFunc() {
 }
 
 function handleNasiyaChange() {
-    if (nasiya.value > amountAfterDiscount.value) {
-        nasiya.value = amountAfterDiscount.value;
+    if (nasiya.value > displayTotal.value - userData.discount) {
+        nasiya.value = Math.max(0, displayTotal.value - userData.discount);
         ToastError("Nasiya summasi qolgan summadan ko'p bo'lishi mumkin emas!");
     }
     showNasiyaDate.value = nasiya.value > 0;
 }
 
 function funcForCash() {
-    getTotlePriceCash.value = finalPayable.value;
+    getTotlePriceCash.value = amountAfterAll.value;
     getTotlePriceCard.value = 0;
 }
 
 function funcForCard() {
-    getTotlePriceCard.value = finalPayable.value;
+    getTotlePriceCard.value = amountAfterAll.value;
     getTotlePriceCash.value = 0;
 }
 
@@ -99,7 +154,9 @@ const sectionDiscountSwitch = computed({ get: () => activeSection.value === 'DIS
 const nasiyaSectionSwitch = computed({ get: () => activeSection.value === 'NASIYA', set: (val) => { if (!val) activeSection.value = 'CONFIRM' } });
 const lastBtnBackToOpenSectionSwitch = computed(() => activeSection.value === 'CLOSED');
 
+
 const loadProducts = async () => { sortedProducts.value = await getSortedRegularProducts(); }
+
 const getCustomersOffline = async () => {
     const data = await db.get_customers.get('get_customers');
     if (data) customers.value = data.list;
@@ -111,22 +168,54 @@ const filteredCustomers = computed(() => {
     return customers.value.filter(user => (user.name?.toLowerCase().includes(q) || user.phone?.toString().includes(q)));
 });
 
+const kassa = ref({})
+
+const getKassaOffline = async () => {
+    const data = await db.get_kassa.get('get_kassa')
+    kassa.value = data.list
+}
+
 const confirmOrder = async () => {
-    console.log({
-        total: displayTotal.value,
+    const payload = {
+        order_id: store.orderId,
+        customer_name: userData.customer_name || "",
+        customer_phone: userData.customer_phone || 0,
         discount: userData.discount,
-        nasiya: nasiya.value,
-        cash: getTotlePriceCash.value,
-        card: getTotlePriceCard.value,
-        loan_date: userData.loan_repayment_date
-    });
+        money: [
+            {
+                paid_money: amountAfterAll.value,
+                currency_id: kassa.value?.[0]?.Kassa?.currency?.id,
+                kassa_id: kassa.value?.[0]?.Kassa?.id
+            }
+        ],
+        loan_repayment_date: userData.loan_repayment_date,
+        loan_comment: userData.loan_comment || "",
+        seller_id: store.sellerId,
+        service_id: 0,
+        service_price: 0,
+    };
+
+    try {
+        const existingData = await db.orders_confirm.get('orders_confirm');
+
+        let currentList = existingData && existingData.list ? existingData.list : [];
+
+        currentList.push(payload);
+
+        await db.orders_confirm.put({
+            id: 'orders_confirm',
+            list: currentList
+        });
+    } catch (error) {
+        console.error('❌ Ошибка при сохранении заказа:', error);
+        ToastError("Buyurtmani saqlashda xatolik yuz berdi!");
+    }
 };
 
 onMounted(() => {
     loadProducts();
     getCustomersOffline();
 });
-
 
 const handleProductsUpdated = () => {
     loadProducts();
@@ -135,7 +224,7 @@ const handleProductsUpdated = () => {
 onMounted(() => {
     loadProducts();
     getCustomersOffline();
-
+    getKassaOffline()
     window.addEventListener('regular-products-updated', handleProductsUpdated);
     window.addEventListener('regular-products-reordered', handleProductsUpdated);
 })
@@ -151,7 +240,7 @@ watch(() => store.updateRegularProducts, () => {
 </script>
 
 <template>
-    <SectionIndex v-model="SectionIndexSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
+    <SectionIndex v-model="SectionIndexSwitch" :minusPrice="minusPrice" :finalPayable="displayTotal">
         <template #back-btn>
             <button @click="closeAllSectionsFunc()"><img src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
@@ -170,14 +259,14 @@ watch(() => store.updateRegularProducts, () => {
         </template>
     </SectionIndex>
 
-    <SectionIndex v-model="SectionIndexConfirmSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
+    <SectionIndex v-model="SectionIndexConfirmSwitch" :minusPrice="minusPrice" :finalPayable="displayTotal">
         <template #back-btn>
             <button @click="swicthFuncBackFromConfirm()"><img
                     src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
 
         <div class="users-info">
-            <button @click="openSearchSwitch = !openSearchSwitch, usersAdd = false">Mijozlar</button>
+            <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
             <div class="search-users-and-new-user-btn" v-if="openSearchSwitch">
                 <label for="info-users">Qidiruv</label>
                 <div class="search-users-info-search">
@@ -212,7 +301,7 @@ watch(() => store.updateRegularProducts, () => {
         </template>
     </SectionIndex>
 
-    <SectionIndex v-model="sectionDiscountSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
+    <SectionIndex v-model="sectionDiscountSwitch" :minusPrice="minusPrice" :finalPayable="displayTotal">
         <template #back-btn>
             <button @click="backFromDiscountFunc()"><img src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
@@ -247,13 +336,14 @@ watch(() => store.updateRegularProducts, () => {
         </template>
     </SectionIndex>
 
-    <SectionIndex v-model="nasiyaSectionSwitch" :minusPrice="userData.discount + nasiya" :finalPayable="finalPayable">
+    <SectionIndex v-model="nasiyaSectionSwitch" :minusPrice="minusPrice" :finalPayable="displayTotal">
         <template #back-btn>
             <button @click="backFromDiscountFunc()"><img src="../../assets/images/png/back-icon-orange.png"></button>
         </template>
 
         <div class="users-info">
-            <button @click="openSearchSwitch = !openSearchSwitch, usersAdd = false">Mijozlar</button>
+            <!-- ИСПРАВЛЕНО: убрал usersAdd = false -->
+            <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
             <div class="search-users-and-new-user-btn" v-if="openSearchSwitch">
                 <div class="search-users-info-search">
                     <input type="text" v-model="searchCustomers" placeholder="Qidiruv...">

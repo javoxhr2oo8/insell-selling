@@ -86,7 +86,6 @@ async function deleteOrderFromList(orderIdToDelete) {
     }
 }
 
-
 useKey((eventData) => {
     if (!isModalOpen.value) return
 
@@ -129,8 +128,8 @@ useKey((eventData) => {
             <slot name="back-btn" />
             <div class="section-header-all-price">
                 <span>{{ store.ordinalNumber }} - Buyurtma</span>
-                <h2 v-if="minusPrice" class="minus-price">{{ formatUZS(minusPrice) }} so'm</h2>
-                <h2>{{ formatUZS(finalPayable ? finalPayable : store.totalPriceOffline) }} so'm</h2>
+                <h2 v-if="minusPrice > 0" class="minus-price"> {{ formatUZS(finalPayable ? finalPayable : store.totalPriceOffline) }} so'm</h2>
+                <h2>{{ formatUZS(finalPayable - minusPrice) }} so'm</h2>
             </div>
             <button @click="openDeleteModal"><i class="fa-solid fa-xmark"></i></button>
         </header>
