@@ -73,7 +73,7 @@ const allConfirmatedOrders = async () => {
       create_trades: trades.map(el => ({
         order_id: 1,
         code: el.Products.code,
-        quantity: Number(el.Products.quantity) || 1,
+        quantity: Number(el.quantity) || 1,
         price: el.Products.price || 0,
         discount: el.Products.discount || 0
       })),

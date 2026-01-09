@@ -291,13 +291,14 @@ const confirmOrder = async () => {
             list
         });
 
+        await deleteOrderFromList(store.orderId);
+
         ToastSuccess("Buyurtma muvaffaqiyatli tasdiqlandi");
     } catch (error) {
         console.error(error);
         ToastError("Buyurtmani saqlashda xatolik yuz berdi!");
     }
 };
-
 
 onMounted(() => {
     loadProducts();
