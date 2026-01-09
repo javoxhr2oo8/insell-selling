@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useStore } from '~/store/store'
 import { useUtil } from './server/util'
 import { db } from './server/db'
@@ -53,36 +53,38 @@ const allConfirmatedOrders = async () => {
   const result = []
 
   for (const order of getOrders.value) {
-    const trades = await TradesById(order.id)
-
     const confirmation = getConfirmOrders.value.find(
-      c => c.order_id === order.id
+      c => String(c.order_id) === String(order.id)
     )
 
     if (!confirmation) continue
 
+    const trades = await TradesById(order.id)
+    if (!trades.length) continue
+
+
     result.push({
       create_order: {
-        customer_name: order.customer_name,
-        customer_phone: Number(order.customer_phone),
-        id: 1
+        id: 1,
+        customer_name: confirmation.customer_name || '',
+        customer_phone: Number(confirmation.customer_phone) || 0
       },
 
       create_trades: trades.map(el => ({
         order_id: 1,
         code: el.Products.code,
-        quantity: el.Products.quantity || 0,
+        quantity: Number(el.Products.quantity) || 1,
         price: el.Products.price || 0,
         discount: el.Products.discount || 0
       })),
 
       order_confirmation: {
         order_id: 1,
-        customer_name: order.customer_name,
-        customer_phone: Number(order.customer_phone),
+        customer_name: confirmation.customer_name || '',
+        customer_phone: Number(confirmation.customer_phone) || 0,
         discount: confirmation.discount || 0,
         money: confirmation.money || [],
-        loan_repayment_date: confirmation.loan_repayment_date,
+        loan_repayment_date: confirmation.loan_repayment_date || "2026-01-09",
         loan_comment: confirmation.loan_comment || '',
         seller_id: confirmation.seller_id,
         service_id: confirmation.service_id || 0,
@@ -91,27 +93,58 @@ const allConfirmatedOrders = async () => {
     })
   }
 
+  console.log('📦 Payload:', result)
   return result
 }
 
-
 const sendToApi = async () => {
   const payload = await allConfirmatedOrders()
-  const res = await api.order_confirmation_for_offline(payload)
-  // console.log('PAYLOAD (trades как есть) 🚀', payload)
-  console.log(res)
+
+  if (!payload.length) {
+    console.log('⚠️ Нечего отправлять')
+    return
+  }
+
+  if (!navigator.onLine) {
+    console.log('❌ Нет интернета — остаётся в Dexie')
+    return
+  }
+
+  try {
+    await api.order_confirmation_for_offline(payload)
+    console.log('✅ Успешно отправлено в API')
+  } catch (e) {
+    console.error('❌ Ошибка API, данные сохранены локально', e)
+  }
+}
+
+const syncWhenOnline = async () => {
+  console.log('🌐 Интернет появился — синхронизация')
+  await ConfirmationOrder()
+  await Orders()
+  await sendToApi()
 }
 
 onMounted(async () => {
   await ConfirmationOrder()
   await Orders()
+
+  if (navigator.onLine) {
+    await sendToApi()
+  }
+
+  window.addEventListener('online', syncWhenOnline)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('online', syncWhenOnline)
 })
 </script>
 
 <template>
   <div>
     <NuxtLayout />
-    <button @click="sendToApi()">confirm offline</button>
+    <!-- <button @click="sendToApi()">confirm offline</button> -->
     <!-- <loader v-if="store.loader" /> -->
   </div>
 </template>

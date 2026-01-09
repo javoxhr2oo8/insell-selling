@@ -3,7 +3,7 @@ import { db } from '~/server/db';
 import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
-import { ToastError } from '@/composables/toast';
+import { ToastError, ToastSuccess } from '@/composables/toast';
 import DropDown from '../elements/dropDown.vue';
 import DoubleInput from '../elements/doubleInput.vue';
 import api from '~/server/api';
@@ -175,21 +175,106 @@ const getKassaOffline = async () => {
     kassa.value = data.list
 }
 
+const paymentType = computed(() => {
+    if (getTotlePriceCash.value > 0 && getTotlePriceCard.value === 0) {
+        return 'CASH';
+    }
+
+    if (getTotlePriceCard.value > 0 && getTotlePriceCash.value === 0) {
+        return 'CARD';
+    }
+
+    return null;
+});
+
+
+const validateConfirmOrder = () => {
+    if (!paymentType.value) {
+        ToastError("Faqat bitta to‘lov turini tanlang (naqd yoki plastik)!");
+        return false;
+    }
+
+    if (!store.orderId) {
+        ToastError("Buyurtma topilmadi!");
+        return false;
+    }
+
+    if (!hasOrder.value || displayTotal.value <= 0) {
+        ToastError("Buyurtmada mahsulot yo'q!");
+        return false;
+    }
+
+    if (userData.discount < 0) {
+        ToastError("Chegirma manfiy bo‘lishi mumkin emas!");
+        return false;
+    }
+
+    if (userData.discount > displayTotal.value) {
+        ToastError("Chegirma summadan katta!");
+        return false;
+    }
+
+    if (nasiya.value > 0) {
+        if (!userData.customer_name || userData.customer_name.trim().length < 2) {
+            ToastError("Nasiya uchun mijoz ismini kiriting!");
+            return false;
+        }
+
+        if (!userData.customer_phone || String(userData.customer_phone).length < 9) {
+            ToastError("Nasiya uchun telefon raqami majburiy!");
+            return false;
+        }
+
+        if (!userData.loan_repayment_date) {
+            ToastError("Nasiya uchun sana tanlang!");
+            return false;
+        }
+    }
+
+    if (!kassa.value?.[0]?.Kassa?.id) {
+        ToastError("Kassa topilmadi!");
+        return false;
+    }
+
+    if (amountAfterAll.value <= 0) {
+        ToastError("To‘lov summasi noto‘g‘ri!");
+        return false;
+    }
+
+    return true;
+};
+
+
 const confirmOrder = async () => {
+    if (!validateConfirmOrder()) return;
+
+    const isCash = paymentType.value === 'CASH';
+
     const payload = {
         order_id: store.orderId,
-        customer_name: userData.customer_name || "",
-        customer_phone: userData.customer_phone || 0,
+
+        customer_name: nasiya.value > 0 ? userData.customer_name.trim() : '',
+        customer_phone: nasiya.value > 0 ? Number(userData.customer_phone) : 0,
+
         discount: userData.discount,
+
         money: [
             {
                 paid_money: amountAfterAll.value,
-                currency_id: kassa.value?.[0]?.Kassa?.currency?.id,
-                kassa_id: kassa.value?.[0]?.Kassa?.id
+
+                kassa_id: isCash
+                    ? kassa.value[1].Kassa.id
+                    : kassa.value[0].Kassa.id,
+
+                currency_id: isCash
+                    ? kassa.value[1].Kassa.currency.id
+                    : kassa.value[0].Kassa.currency.id
             }
         ],
-        loan_repayment_date: userData.loan_repayment_date,
-        loan_comment: userData.loan_comment || "",
+
+        loan_repayment_date: nasiya.value > 0 ? userData.loan_repayment_date : null,
+        loan_comment: nasiya.value > 0 ? (userData.loan_comment?.trim() || '') : '',
+
         seller_id: store.sellerId,
         service_id: 0,
         service_price: 0,
@@ -197,20 +282,22 @@ const confirmOrder = async () => {
 
     try {
         const existingData = await db.orders_confirm.get('orders_confirm');
+        const list = existingData?.list || [];
 
-        let currentList = existingData && existingData.list ? existingData.list : [];
-
-        currentList.push(payload);
+        list.push(payload);
 
         await db.orders_confirm.put({
             id: 'orders_confirm',
-            list: currentList
+            list
         });
+
+        ToastSuccess("Buyurtma muvaffaqiyatli tasdiqlandi");
     } catch (error) {
-        console.error('❌ Ошибка при сохранении заказа:', error);
+        console.error(error);
         ToastError("Buyurtmani saqlashda xatolik yuz berdi!");
     }
 };
+
 
 onMounted(() => {
     loadProducts();
