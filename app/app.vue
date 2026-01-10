@@ -6,7 +6,7 @@ import { db } from './server/db'
 import api from './server/api'
 
 const store = useStore()
-const { routerState } = useUtil()
+const { routerState, focusInput } = useUtil()
 
 const tokenCookie = useCookie('access_token')
 
@@ -31,6 +31,10 @@ if (process.client) {
   }
 }
 
+
+onMounted(()=> {
+  focusInput('trades-input')
+})
 </script>
 
 <template>

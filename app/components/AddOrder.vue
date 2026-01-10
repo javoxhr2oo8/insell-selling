@@ -26,6 +26,9 @@ const getCreatedOrders = async () => {
     if (list.length === 0) {
         store.orderId = null;
         store.ordinalNumber = null;
+        setTimeout(()=> {
+            createOrderOffline()
+        }, 200)
         return;
     }
 
@@ -44,7 +47,7 @@ watch(() => store.updateOrders, (newVal) => {
 
 const generateOfflineOrderId = () => `OFF-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-const createOrderOffline = async () => {
+async function createOrderOffline () {
     const existing = await db.createOrderOffline.get('createOrderOffline')
     const list = existing?.list || []
     const maxOrdinal = list.length > 0

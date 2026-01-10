@@ -226,6 +226,10 @@ onUnmounted(() => {
 });
 
 watch(() => store.updateRegularProducts, loadProducts);
+
+watch(()=> store.updateLocalBase, ()=> {
+    getKassaOffline()
+})
 </script>
 
 <template>

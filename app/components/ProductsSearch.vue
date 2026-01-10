@@ -48,12 +48,13 @@ const handleSearch = () => {
             const name2 = prod.product_type?.name2?.toLowerCase() || ''
             const category = prod.category?.name?.toLowerCase() || ''
             const code = prod.code?.toString() || ''
-
+            const code_2 = prod.code_2?.toString() || ''
             return (
                 name.includes(query) ||
                 name2.includes(query) ||
                 category.includes(query) ||
-                code.includes(query)
+                code.includes(query) ||
+                code_2.includes(query)
             )
         })
 

@@ -61,6 +61,7 @@ async function deleteOrderFromList(orderIdToDelete) {
             list: updatedList,
             updatedAt: new Date().toISOString()
         });
+        
         await db.offlineTrades.delete(orderIdToDelete).catch(() => { });
 
         if (String(store.orderId) === String(orderIdToDelete)) {
@@ -76,7 +77,6 @@ async function deleteOrderFromList(orderIdToDelete) {
         }
 
         isModalOpen.value = false;
-        ToastSuccess("Buyurtma o'chirildi");
 
         store.updateOrders = true;
         setTimeout(() => { store.updateOrders = false }, 100);
