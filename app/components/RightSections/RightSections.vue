@@ -7,7 +7,8 @@ import { ToastError, ToastSuccess } from '@/composables/toast';
 import DropDown from '../elements/dropDown.vue';
 import DoubleInput from '../elements/doubleInput.vue';
 
-const emit = defineEmits(['refreshOrders'])
+const emit = defineEmits(['refreshOrders','orderAccept'])
+
 
 const store = useStore();
 const { formatUZS, getSortedRegularProducts } = useUtil();
@@ -20,8 +21,8 @@ const openSearchSwitch = ref(false);
 const loadingBtn = ref(false);
 const nasiya = ref(0);
 const showNasiyaDate = ref(false);
-const getTotlePriceCash = ref(0);
-const getTotlePriceCard = ref(0);
+const getTotlePriceCash = ref('');
+const getTotlePriceCard = ref('');
 const kassa = ref({});
 
 const userData = reactive({
@@ -31,6 +32,17 @@ const userData = reactive({
     loan_repayment_date: new Date().toISOString().substr(0, 10),
     loan_comment: ''
 });
+
+function clearInputs() {
+    userData.customer_name = ''
+    userData.customer_phone = ''
+    userData.discount = 0
+    getTotlePriceCard.value = ''
+    getTotlePriceCash.value = ''
+    openSearchSwitch.value = false
+    store.userAddSwicth = false
+    store.getOneUser = {}
+}
 
 watch(
     () => store.getOneUser,
@@ -59,7 +71,6 @@ async function deleteOrderFromList(orderIdToDelete) {
             list: updatedList,
             updatedAt: new Date().toISOString()
         });
-        await db.offlineTrades.delete(orderIdToDelete).catch(() => { });
 
         if (String(store.orderId) === String(orderIdToDelete)) {
             if (nextOrder) {
@@ -190,9 +201,14 @@ const confirmOrder = async () => {
         await db.orders_confirm.put({ id: 'orders_confirm', list });
         await deleteOrderFromList(store.orderId);
         ToastSuccess("Tasdiqlandi");
+        clearInputs()
         activeSection.value = 'INDEX';
         emit('refreshOrders')
+        emit('orderAccept')
+      
     } catch (error) {
+        console.log(error);
+
     } finally {
         loadingBtn.value = false;
     }
@@ -360,6 +376,7 @@ watch(() => store.updateRegularProducts, loadProducts);
     <button class="open-section-btn" v-if="lastBtnBackToOpenSectionSwitch" @click="openFirstSection()">
         <img src="../../assets/images/png/back-icon.png">
     </button>
+
 </template>
 
 <style lang="scss" scoped>

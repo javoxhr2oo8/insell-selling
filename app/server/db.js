@@ -12,7 +12,8 @@ db.version(1).stores({
   get_customers: 'id',
   get_kassa: 'id',
   get_services: 'id',
-  orders_confirm: 'id'
+  orders_confirm: 'id',
+  error_orders: 'id'
 });
 
 db.version(2).stores({

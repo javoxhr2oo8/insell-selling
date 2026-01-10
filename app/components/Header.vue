@@ -4,9 +4,17 @@ import { useKey } from '@/composables/useKey';
 import keyboardEventInfo from './elements/keyboardEventInfo.vue';
 import DeleteAlertModal from './AlertModal/DeleteAlertModal.vue';
 import { useUtil } from '~/server/util';
+import Dexie from 'dexie'
+
 const { theme, toggleTheme } = useTheme()
 
 const { routerState } = useUtil()
+
+
+const clearIndexedDB = async () => {
+    await Dexie.delete('LocalDataBase')
+    console.log('🗑️ IndexedDB очищена')
+}
 
 useKey((eventData) => {
     if (eventData.ctrl && eventData.key === 'm') {
@@ -23,6 +31,7 @@ function logOut() {
     document.cookie = "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
     localStorage.clear();
+    clearIndexedDB()
 
     window.location.href = "/signIn";
 }

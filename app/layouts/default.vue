@@ -4,6 +4,9 @@ import api from '~/server/api';
 import { useStore } from '~/store/store';
 import { useUtil } from '~/server/util';
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+
+const route = useRoute()
 
 const { findError } = useUtil()
 const store = useStore()
@@ -123,6 +126,13 @@ onMounted(() => {
 const refreshData = async () => {
     await loadAllData()
 }
+
+watch(
+  () => route.fullPath,
+  (newPath, oldPath) => {
+    refreshData()
+  }
+)
 </script>
 
 <template>

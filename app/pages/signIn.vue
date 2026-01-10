@@ -37,7 +37,7 @@ const signIn = async () => {
         defaultBtn.value = true
         loadingBtn.value = false
     })
-    
+
     if (res?.access_token) {
         localStorage.setItem('info', JSON.stringify(res))
 
@@ -64,7 +64,7 @@ const onPhoneInput = (event) => {
     input.value = data.username;
 };
 
-onMounted(()=> {
+onMounted(() => {
     focusInput('login-phone')
 })
 </script>
