@@ -119,7 +119,6 @@ const sendToApi = async () => {
 }
 
 const syncWhenOnline = async () => {
-  console.log('🌐 Интернет появился — синхронизация')
   await ConfirmationOrder()
   await Orders()
   await sendToApi()

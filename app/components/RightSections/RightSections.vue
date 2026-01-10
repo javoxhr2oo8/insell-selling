@@ -6,8 +6,8 @@ import { useUtil } from '~/server/util';
 import { ToastError, ToastSuccess } from '@/composables/toast';
 import DropDown from '../elements/dropDown.vue';
 import DoubleInput from '../elements/doubleInput.vue';
-import api from '~/server/api';
 
+const emit = defineEmits(['refreshOrders'])
 
 const store = useStore();
 const { formatUZS, getSortedRegularProducts } = useUtil();
@@ -17,27 +17,41 @@ const customers = ref([]);
 const searchCustomers = ref("");
 const activeSection = ref('INDEX');
 const openSearchSwitch = ref(false);
-const usersAdd = ref(false);
-const defaultBtn = ref(true);
 const loadingBtn = ref(false);
+const nasiya = ref(0);
+const showNasiyaDate = ref(false);
+const getTotlePriceCash = ref(0);
+const getTotlePriceCard = ref(0);
+const kassa = ref({});
+
+const userData = reactive({
+    customer_name: '',
+    customer_phone: '',
+    discount: 0,
+    loan_repayment_date: new Date().toISOString().substr(0, 10),
+    loan_comment: ''
+});
+
+watch(
+    () => store.getOneUser,
+    (user) => {
+        if (!user) return;
+        userData.customer_name = user.name || '';
+        userData.customer_phone = user.phone ? String(user.phone) : '';
+    },
+    { deep: true, immediate: true }
+);
 
 async function deleteOrderFromList(orderIdToDelete) {
     if (!orderIdToDelete) return;
-
     try {
         const data = await db.createOrderOffline.get('createOrderOffline');
         if (!data || !data.list) return;
 
         const currentIndex = data.list.findIndex(o => String(o.id) === String(orderIdToDelete));
-
         let nextOrder = null;
         if (data.list.length > 1) {
-            if (currentIndex < data.list.length - 1) {
-                nextOrder = data.list[currentIndex + 1];
-            }
-            else {
-                nextOrder = data.list[currentIndex - 1];
-            }
+            nextOrder = currentIndex < data.list.length - 1 ? data.list[currentIndex + 1] : data.list[currentIndex - 1];
         }
 
         const updatedList = data.list.filter(order => String(order.id) !== String(orderIdToDelete));
@@ -50,58 +64,28 @@ async function deleteOrderFromList(orderIdToDelete) {
         if (String(store.orderId) === String(orderIdToDelete)) {
             if (nextOrder) {
                 store.orderId = nextOrder.id;
-                focusInput('trades-input')
                 store.ordinalNumber = nextOrder.ordinal_number;
             } else {
-                emit('update:modelValue', false);
                 store.orderId = null;
                 store.ordinalNumber = null;
             }
         }
-
-        isModalOpen.value = false;
-        ToastSuccess("Buyurtma o'chirildi");
-
         store.updateOrders = true;
         setTimeout(() => { store.updateOrders = false }, 100);
-
     } catch (error) {
         console.error("Xatolik:", error);
     }
 }
 
-const userData = reactive({
-    customer_name: '',
-    customer_phone: 0,
-    discount: 0,
-    loan_repayment_date: new Date().toISOString().substr(0, 10),
-    loan_comment: ''
-});
+const hasOrder = computed(() => store.offlineOrdersList ? (store.totalPriceOffline || 0) > 0 : (store.ordersBlance?.[0]?.balance || 0) > 0);
+const displayTotal = computed(() => store.offlineOrdersList ? (store.totalPriceOffline || 0) : (store.ordersBlance?.[0]?.balance || 0));
+const minusPrice = computed(() => (userData.discount || 0) + (nasiya.value || 0));
+const amountAfterAll = computed(() => Math.max(0, displayTotal.value - minusPrice.value));
 
-const nasiya = ref(0);
-const showNasiyaDate = ref(false);
-const balance = ref(0);
-const getTotlePriceCash = ref(0);
-const getTotlePriceCard = ref(0);
-
-const hasOrder = computed(() => {
-    return store.offlineOrdersList ? (store.totalPriceOffline || 0) > 0 : (store.ordersBlance?.[0]?.balance || 0) > 0;
-});
-
-const displayTotal = computed(() => {
-    return store.offlineOrdersList ? (store.totalPriceOffline || 0) : (store.ordersBlance?.[0]?.balance || 0);
-});
-
-const minusPrice = computed(() => {
-    return (userData.discount || 0) + (nasiya.value || 0);
-});
-
-const finalPayable = computed(() => {
-    return displayTotal.value;
-});
-
-const amountAfterAll = computed(() => {
-    return Math.max(0, displayTotal.value - minusPrice.value);
+const paymentType = computed(() => {
+    if (getTotlePriceCash.value > 0 && getTotlePriceCard.value === 0) return 'CASH';
+    if (getTotlePriceCard.value > 0 && getTotlePriceCash.value === 0) return 'CARD';
+    return null;
 });
 
 function applyDiscountPercent(percent) {
@@ -110,43 +94,35 @@ function applyDiscountPercent(percent) {
 
 function applyPercentDiscount(event) {
     const percent = parseFloat(event.target.value);
-    if (!isNaN(percent)) {
-        userData.discount = Math.round((displayTotal.value * percent) / 100);
-    }
+    if (!isNaN(percent)) userData.discount = Math.round((displayTotal.value * percent) / 100);
 }
 
 function warningFunc() {
     if (userData.discount > displayTotal.value) {
         userData.discount = displayTotal.value;
-        ToastError("Chegirma summadan ko'p bo'lishi mumkin emas!");
+        ToastError("Chegirma summadan ko'p bo'lishi!");
     }
 }
 
 function handleNasiyaChange() {
-    if (nasiya.value > displayTotal.value - userData.discount) {
-        nasiya.value = Math.max(0, displayTotal.value - userData.discount);
-        ToastError("Nasiya summasi qolgan summadan ko'p bo'lishi mumkin emas!");
+    const maxNasiya = displayTotal.value - userData.discount;
+    if (nasiya.value > maxNasiya) {
+        nasiya.value = Math.max(0, maxNasiya);
+        ToastError("Nasiya summasi noto'g'ri!");
     }
     showNasiyaDate.value = nasiya.value > 0;
 }
 
-function funcForCash() {
-    getTotlePriceCash.value = amountAfterAll.value;
-    getTotlePriceCard.value = 0;
-}
+const funcForCash = () => { getTotlePriceCash.value = amountAfterAll.value; getTotlePriceCard.value = 0; };
+const funcForCard = () => { getTotlePriceCard.value = amountAfterAll.value; getTotlePriceCash.value = 0; };
 
-function funcForCard() {
-    getTotlePriceCard.value = amountAfterAll.value;
-    getTotlePriceCash.value = 0;
-}
-
-function swicthFuncForConfirm() { activeSection.value = 'CONFIRM'; }
-function openDiscountSection() { balance.value = displayTotal.value; activeSection.value = 'DISCOUNT'; }
-function openNasiyaSectionSwitch() { balance.value = displayTotal.value; activeSection.value = 'NASIYA'; }
-function backFromDiscountFunc() { activeSection.value = 'CONFIRM'; }
-function swicthFuncBackFromConfirm() { activeSection.value = 'INDEX'; }
-function closeAllSectionsFunc() { activeSection.value = 'CLOSED'; }
-function openFirstSection() { activeSection.value = 'INDEX'; }
+const swicthFuncForConfirm = () => activeSection.value = 'CONFIRM';
+const openDiscountSection = () => activeSection.value = 'DISCOUNT';
+const openNasiyaSectionSwitch = () => activeSection.value = 'NASIYA';
+const backFromDiscountFunc = () => activeSection.value = 'CONFIRM';
+const swicthFuncBackFromConfirm = () => activeSection.value = 'INDEX';
+const closeAllSectionsFunc = () => activeSection.value = 'CLOSED';
+const openFirstSection = () => activeSection.value = 'INDEX';
 
 const SectionIndexSwitch = computed({ get: () => activeSection.value === 'INDEX', set: (val) => { if (!val) activeSection.value = 'CLOSED' } });
 const SectionIndexConfirmSwitch = computed({ get: () => activeSection.value === 'CONFIRM', set: (val) => { if (!val) activeSection.value = 'INDEX' } });
@@ -154,13 +130,16 @@ const sectionDiscountSwitch = computed({ get: () => activeSection.value === 'DIS
 const nasiyaSectionSwitch = computed({ get: () => activeSection.value === 'NASIYA', set: (val) => { if (!val) activeSection.value = 'CONFIRM' } });
 const lastBtnBackToOpenSectionSwitch = computed(() => activeSection.value === 'CLOSED');
 
-
-const loadProducts = async () => { sortedProducts.value = await getSortedRegularProducts(); }
-
+const loadProducts = async () => { sortedProducts.value = await getSortedRegularProducts(); };
 const getCustomersOffline = async () => {
     const data = await db.get_customers.get('get_customers');
     if (data) customers.value = data.list;
-}
+};
+
+const getKassaOffline = async () => {
+    const data = await db.get_kassa.get('get_kassa');
+    if (data) kassa.value = data.list;
+};
 
 const filteredCustomers = computed(() => {
     if (!searchCustomers.value) return customers.value;
@@ -168,113 +147,37 @@ const filteredCustomers = computed(() => {
     return customers.value.filter(user => (user.name?.toLowerCase().includes(q) || user.phone?.toString().includes(q)));
 });
 
-const kassa = ref({})
-
-const getKassaOffline = async () => {
-    const data = await db.get_kassa.get('get_kassa')
-    kassa.value = data.list
-}
-
-const paymentType = computed(() => {
-    if (getTotlePriceCash.value > 0 && getTotlePriceCard.value === 0) {
-        return 'CASH';
-    }
-
-    if (getTotlePriceCard.value > 0 && getTotlePriceCash.value === 0) {
-        return 'CARD';
-    }
-
-    return null;
-});
-
-
 const validateConfirmOrder = () => {
-    if (!paymentType.value) {
-        ToastError("Faqat bitta to‘lov turini tanlang (naqd yoki plastik)!");
-        return false;
-    }
-
-    if (!store.orderId) {
-        ToastError("Buyurtma topilmadi!");
-        return false;
-    }
-
-    if (!hasOrder.value || displayTotal.value <= 0) {
-        ToastError("Buyurtmada mahsulot yo'q!");
-        return false;
-    }
-
-    if (userData.discount < 0) {
-        ToastError("Chegirma manfiy bo‘lishi mumkin emas!");
-        return false;
-    }
-
-    if (userData.discount > displayTotal.value) {
-        ToastError("Chegirma summadan katta!");
-        return false;
-    }
+    if (!paymentType.value) return ToastError("To‘lov turini tanlang!"), false;
+    if (!store.orderId) return ToastError("Buyurtma topilmadi!"), false;
+    if (!hasOrder.value || displayTotal.value <= 0) return ToastError("Mahsulot yo'q!"), false;
 
     if (nasiya.value > 0) {
-        if (!userData.customer_name || userData.customer_name.trim().length < 2) {
-            ToastError("Nasiya uchun mijoz ismini kiriting!");
-            return false;
-        }
-
-        if (!userData.customer_phone || String(userData.customer_phone).length < 9) {
-            ToastError("Nasiya uchun telefon raqami majburiy!");
-            return false;
-        }
-
-        if (!userData.loan_repayment_date) {
-            ToastError("Nasiya uchun sana tanlang!");
-            return false;
-        }
+        if (!userData.customer_name?.trim()) return ToastError("Mijoz ismini kiriting!"), false;
+        if (!userData.customer_phone || String(userData.customer_phone).length < 7) return ToastError("Telefon raqami xato!"), false;
     }
 
-    if (!kassa.value?.[0]?.Kassa?.id) {
-        ToastError("Kassa topilmadi!");
-        return false;
-    }
-
-    if (amountAfterAll.value <= 0) {
-        ToastError("To‘lov summasi noto‘g‘ri!");
-        return false;
-    }
-
+    if (!kassa.value?.[0]?.Kassa?.id) return ToastError("Kassa topilmadi!"), false;
     return true;
 };
 
-
 const confirmOrder = async () => {
     if (!validateConfirmOrder()) return;
+    loadingBtn.value = true;
 
     const isCash = paymentType.value === 'CASH';
-
     const payload = {
         order_id: store.orderId,
-
-        customer_name: nasiya.value > 0 ? userData.customer_name.trim() : '',
-        customer_phone: nasiya.value > 0 ? Number(userData.customer_phone) : 0,
-
+        customer_name: userData.customer_name.trim(),
+        customer_phone: Number(String(userData.customer_phone).replace(/\D/g, '')),
         discount: userData.discount,
-
-        money: [
-            {
-                paid_money: amountAfterAll.value,
-
-                kassa_id: isCash
-                    ? kassa.value[1].Kassa.id
-                    : kassa.value[0].Kassa.id,
-
-                currency_id: isCash
-                    ? kassa.value[1].Kassa.currency.id
-                    : kassa.value[0].Kassa.currency.id
-            }
-        ],
-
+        money: [{
+            paid_money: amountAfterAll.value,
+            kassa_id: isCash ? kassa.value[1].Kassa.id : kassa.value[0].Kassa.id,
+            currency_id: isCash ? kassa.value[1].Kassa.currency.id : kassa.value[0].Kassa.currency.id
+        }],
         loan_repayment_date: nasiya.value > 0 ? userData.loan_repayment_date : null,
         loan_comment: nasiya.value > 0 ? (userData.loan_comment?.trim() || '') : '',
-
         seller_id: store.sellerId,
         service_id: 0,
         service_price: 0,
@@ -283,48 +186,30 @@ const confirmOrder = async () => {
     try {
         const existingData = await db.orders_confirm.get('orders_confirm');
         const list = existingData?.list || [];
-
         list.push(payload);
-
-        await db.orders_confirm.put({
-            id: 'orders_confirm',
-            list
-        });
-
+        await db.orders_confirm.put({ id: 'orders_confirm', list });
         await deleteOrderFromList(store.orderId);
-
-        ToastSuccess("Buyurtma muvaffaqiyatli tasdiqlandi");
+        ToastSuccess("Tasdiqlandi");
+        activeSection.value = 'INDEX';
+        emit('refreshOrders')
     } catch (error) {
-        console.error(error);
-        ToastError("Buyurtmani saqlashda xatolik yuz berdi!");
+    } finally {
+        loadingBtn.value = false;
     }
 };
 
 onMounted(() => {
     loadProducts();
     getCustomersOffline();
+    getKassaOffline();
+    window.addEventListener('regular-products-updated', loadProducts);
 });
 
-const handleProductsUpdated = () => {
-    loadProducts();
-}
-
-onMounted(() => {
-    loadProducts();
-    getCustomersOffline();
-    getKassaOffline()
-    window.addEventListener('regular-products-updated', handleProductsUpdated);
-    window.addEventListener('regular-products-reordered', handleProductsUpdated);
-})
-
 onUnmounted(() => {
-    window.removeEventListener('regular-products-updated', handleProductsUpdated);
-    window.removeEventListener('regular-products-reordered', handleProductsUpdated);
-})
+    window.removeEventListener('regular-products-updated', loadProducts);
+});
 
-watch(() => store.updateRegularProducts, () => {
-    handleProductsUpdated()
-})
+watch(() => store.updateRegularProducts, loadProducts);
 </script>
 
 <template>
@@ -354,22 +239,29 @@ watch(() => store.updateRegularProducts, () => {
         </template>
 
         <div class="users-info">
-            <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
+            <button @click="openSearchSwitch = !openSearchSwitch, store.userAddSwicth = false">Mijozlar</button>
             <div class="search-users-and-new-user-btn" v-if="openSearchSwitch">
                 <label for="info-users">Qidiruv</label>
                 <div class="search-users-info-search">
                     <input id="info-users" type="text" v-model="searchCustomers">
-                    <button @click="usersAdd = !usersAdd"><img src="../../assets/images/png/new-user-icon.png"></button>
+                    <button @click="store.userAddSwicth = !store.userAddSwicth"
+                        :class="{ 'select-user-button': store.userAddSwicth }"><img v-if="!store.userAddSwicth"
+                            src="../../assets/images/png/new-user-icon.png"><i v-if="store.userAddSwicth"
+                            class="fas fa-user"></i></button>
                 </div>
-                <DropDown v-if="!usersAdd" :data="filteredCustomers" />
+                <DropDown v-if="!store.userAddSwicth" :data="filteredCustomers" />
             </div>
-            <DoubleInput title="Yangi mijoz" v-if="usersAdd">
-                <div class="section-input-wrapper"><input type="text" placeholder="Mijoz ismi"></div>
-                <div class="section-input-wrapper"><input type="text" placeholder="Telefon raqam"></div>
+            <DoubleInput :title="store.getOneUser.name ? 'Mijoz' : 'Yangi mijoz'" v-if="store.userAddSwicth">
+                <div class="section-input-wrapper"><input type="text" v-model="userData.customer_name"
+                        placeholder="Mijoz ismi">
+                </div>
+                <div class="section-input-wrapper"><input type="text" v-model="userData.customer_phone"
+                        placeholder="Telefon raqam">
+                </div>
             </DoubleInput>
         </div>
 
-        <DoubleInput title="Tolov" v-if="!usersAdd">
+        <DoubleInput title="Tolov" v-if="!store.userAddSwicth">
             <div class="section-input-wrapper">
                 <input v-model.number="getTotlePriceCash" type="number" placeholder="Naqd">
                 <button @click="funcForCash()"><i class="fas fa-magnet"></i></button>
@@ -430,13 +322,12 @@ watch(() => store.updateRegularProducts, () => {
         </template>
 
         <div class="users-info">
-            <!-- ИСПРАВЛЕНО: убрал usersAdd = false -->
             <button @click="openSearchSwitch = !openSearchSwitch">Mijozlar</button>
             <div class="search-users-and-new-user-btn" v-if="openSearchSwitch">
                 <div class="search-users-info-search">
                     <input type="text" v-model="searchCustomers" placeholder="Qidiruv...">
                 </div>
-                <DropDown v-if="!usersAdd" :data="filteredCustomers" />
+                <DropDown v-if="!store.userAddSwicth" :data="filteredCustomers" />
             </div>
         </div>
 
@@ -481,6 +372,15 @@ watch(() => store.updateRegularProducts, () => {
     color: var(--dark-color);
     opacity: 0.9;
     font-size: 32px;
+}
+
+.select-user-button {
+    padding: 0 13.5px !important;
+
+    i {
+        color: var(--pr-color);
+        font-size: 30px;
+    }
 }
 
 .regualr-products-wrapper {

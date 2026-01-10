@@ -1,19 +1,23 @@
 <script setup>
-import { useUtil } from '~/server/util';
+import { useUtil } from '~/server/util'
+import { useStore } from '~/store/store'
+
 const { data } = defineProps(['data'])
-
 const { formatPhoneUZ } = useUtil()
+const store = useStore()
 
-
-onMounted(() => {
-    console.log(data)
-})
+const selectUser = (item) => {
+    store.getOneUser = item
+    store.userAddSwicth = true
+}
 </script>
+
 
 <template>
     <div class="drop-down">
         <div class="drop-down-wrapper">
-            <div class="drop-down-item" v-for="item in data" :key="item">
+            <div class="drop-down-item" v-for="item in data" :key="item"
+                @click="selectUser(item)">
                 <span>{{ item.name }}</span>
                 <span>{{ formatPhoneUZ(item.phone) }}</span>
             </div>

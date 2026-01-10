@@ -26,6 +26,8 @@ export const useStore = defineStore('myStore', () => {
     const updateTrade = ref(false)
     const updateRegularProducts = ref(false)
     const updateLocalBase = ref(false)
+    const userAddSwicth = ref(false)
+    const getOneUser = ref({})
     return { 
         modalProducts,
         productDetailShow,
@@ -50,6 +52,8 @@ export const useStore = defineStore('myStore', () => {
         offlineOrdersList,
         updateTrade,
         updateRegularProducts,
-        updateLocalBase
+        updateLocalBase,
+        userAddSwicth,
+        getOneUser
      }
 })

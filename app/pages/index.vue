@@ -1,9 +1,10 @@
 <script setup>
 import api from '~/server/api';
 import { useStore } from '~/store/store';
+import { ref } from 'vue'
 
 const store = useStore()
-
+const getOrder = ref(null)
 
 const data = reactive({
     branch_id: store.branchId,
@@ -19,6 +20,10 @@ const getUsers = async () => {
     store.customerPhone = res?.data[0]?.phone
 }
 
+function updateOrders() {
+    getOrder.value.getCreatedOrders()
+}
+
 onMounted(() => {
     getUsers()
 })
@@ -27,10 +32,10 @@ onMounted(() => {
 <template>
     <div>
         <Header />
-        <AddOrder />
+        <AddOrder ref="getOrder" />
         <div class="orders-and-total-price-wrapper">
             <Orders class="orders-component" />
-            <RightSections/>
+            <RightSections @refresh-orders="updateOrders" />
         </div>
         <!-- <confirm /> -->
     </div>

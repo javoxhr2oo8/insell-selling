@@ -5,6 +5,8 @@ import { ToastSuccess } from '@/composables/toast'
 import { useUtil } from '~/server/util'
 import { db } from '~/server/db'
 
+const emit = defineEmits(['refreshOrders'])
+
 const store = useStore()
 
 const { focusInput } = useUtil()
